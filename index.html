@@ -1,1669 +1,842 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>En-Vital Longevity Clinic - Baseline Assessment</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>KORVEX — NCAAB Betting Intelligence</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/*  ═══════════════════════════════════════════════════════════════════════
+    KORVEX TERMINAL — Precision Sports Analytics
+    Aesthetic: "Bloomberg Terminal meets Mission Control"
+    Dark, data-dense, phosphor-green accents, monospace numerics
+    ═══════════════════════════════════════════════════════════════════════ */
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-            line-height: 1.6;
-        }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-        }
+:root{
+  --void:#060710;
+  --bg:#0a0b12;
+  --s1:#0f1019;
+  --s2:#141520;
+  --s3:#191b28;
+  --s-hover:#1c1e2d;
+  --edge:#1a1d2c;
+  --edge-hi:#272b3e;
+  --edge-focus:#363c56;
+  --ink:#e0e3ee;
+  --ink2:#969ab2;
+  --ink3:#6a6e84;
+  --ink-mute:#484c62;
+  --pos:#2dd4a0;
+  --pos-dim:rgba(45,212,160,.1);
+  --pos-glow:rgba(45,212,160,.22);
+  --neg:#f4718a;
+  --neg-dim:rgba(244,113,138,.1);
+  --neg-glow:rgba(244,113,138,.22);
+  --warn:#f5c542;
+  --warn-dim:rgba(245,197,66,.1);
+  --blue:#5b9cf5;
+  --blue-dim:rgba(91,156,245,.1);
+  --purple:#9b7ff0;
+  --orange:#f09c5b;
+  --r:10px
+}
 
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 40px;
-            text-align: center;
-        }
+html{font-size:15px;-webkit-font-smoothing:antialiased}
+body{
+  font-family:'Manrope',sans-serif;background:var(--bg);color:var(--ink);
+  min-height:100vh;overflow-x:hidden;
+  background-image:
+    radial-gradient(ellipse 55% 30% at 50% -8%,rgba(45,212,160,.025),transparent),
+    radial-gradient(ellipse 45% 25% at 80% 105%,rgba(91,156,245,.02),transparent);
+}
 
-        .header h1 {
-            font-size: 2rem;
-            margin-bottom: 10px;
-            font-weight: 600;
-        }
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--void)}
+::-webkit-scrollbar-thumb{background:var(--edge-hi);border-radius:3px}
 
-        .header p {
-            font-size: 1.1rem;
-            opacity: 0.95;
-        }
+/* ── LOADING ───────────────────────────────────────────────────────── */
+#loader{
+  position:fixed;inset:0;z-index:9999;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.4rem;
+  transition:opacity .5s,visibility .5s;
+}
+#loader.done{opacity:0;visibility:hidden;pointer-events:none}
+.ld-brand{
+  font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:1.3rem;
+  letter-spacing:.18em;color:var(--pos);text-shadow:0 0 28px var(--pos-glow);
+}
+.ld-ring{
+  width:28px;height:28px;border:2px solid var(--edge-hi);border-top-color:var(--pos);
+  border-radius:50%;animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ld-msg{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--ink3);letter-spacing:.05em}
 
-        .form-content {
-            padding: 40px;
-        }
+/* ── ERROR ──────────────────────────────────────────────────────────── */
+#errBox{
+  display:none;margin:1rem 2rem 0;padding:.9rem 1.3rem;
+  background:var(--neg-dim);border:1px solid rgba(244,113,138,.25);border-radius:var(--r);
+  font-family:'IBM Plex Mono',monospace;font-size:.75rem;color:var(--neg);line-height:1.7;
+}
 
-        .section-card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 24px;
-            border: 1px solid #e9ecef;
-            transition: all 0.3s ease;
-        }
+/* ── HEADER ─────────────────────────────────────────────────────────── */
+header{
+  padding:1.4rem 2.2rem 1.1rem;border-bottom:1px solid var(--edge);
+  display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:.8rem;
+  background:linear-gradient(180deg,rgba(45,212,160,.012),transparent);
+}
+.hd-brand{
+  font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:1.25rem;
+  letter-spacing:.16em;color:var(--pos);text-shadow:0 0 26px var(--pos-glow);
+}
+.hd-brand em{
+  font-style:normal;color:var(--ink-mute);font-weight:300;font-size:.75rem;
+  letter-spacing:.08em;margin-left:.6rem;
+}
+.hd-sub{font-size:.7rem;color:var(--ink3);font-family:'IBM Plex Mono',monospace;letter-spacing:.04em;margin-top:.15rem}
+.hd-meta{font-family:'IBM Plex Mono',monospace;font-size:.67rem;color:var(--ink-mute);text-align:right;line-height:1.7}
+.hd-meta b{color:var(--ink2)}
+.live-dot{
+  display:inline-flex;align-items:center;gap:5px;font-size:.6rem;color:var(--pos);
+  font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+}
+.live-dot::before{
+  content:'';width:5px;height:5px;border-radius:50%;background:var(--pos);
+  box-shadow:0 0 7px var(--pos-glow);animation:blink 2s ease infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
-        .section-card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
+/* ── LAYOUT ─────────────────────────────────────────────────────────── */
+.wrap{max-width:1500px;margin:0 auto;padding:1.3rem 2rem 3rem}
 
-        .section-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            cursor: pointer;
-            margin-bottom: 20px;
-        }
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.anim{opacity:0;animation:rise .4s ease forwards}
 
-        .section-header h2 {
-            color: #2d3748;
-            font-size: 1.5rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+/* ── KPI CARDS ──────────────────────────────────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.8rem;margin-bottom:1.3rem}
+.kpi{
+  background:var(--s1);border:1px solid var(--edge);border-radius:var(--r);
+  padding:1.05rem 1.2rem;position:relative;overflow:hidden;
+  transition:border-color .2s,background .2s,transform .18s;
+}
+.kpi:hover{border-color:var(--edge-hi);background:var(--s-hover);transform:translateY(-1px)}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;opacity:.45;transition:opacity .2s}
+.kpi:hover::after{opacity:.8}
+.kpi.t-pos::after{background:linear-gradient(90deg,transparent,var(--pos),transparent)}
+.kpi.t-neg::after{background:linear-gradient(90deg,transparent,var(--neg),transparent)}
+.kpi.t-warn::after{background:linear-gradient(90deg,transparent,var(--warn),transparent)}
+.kpi.t-blue::after{background:linear-gradient(90deg,transparent,var(--blue),transparent)}
+.kpi-lbl{
+  font-family:'IBM Plex Mono',monospace;font-size:.58rem;font-weight:500;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:.4rem;
+}
+.kpi-val{font-family:'IBM Plex Mono',monospace;font-size:1.55rem;font-weight:600;line-height:1.1}
+.kpi-val.c-g{color:var(--pos)}.kpi-val.c-r{color:var(--neg)}.kpi-val.c-w{color:var(--warn)}
+.kpi-note{
+  font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--ink-mute);
+  margin-top:.32rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.pill{display:inline-block;padding:1px 5px;border-radius:3px;font-size:.57rem;font-weight:500;margin-left:2px}
+.pill-g{background:var(--pos-dim);color:var(--pos)}
+.pill-r{background:var(--neg-dim);color:var(--neg)}
 
-        .section-number {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
+/* ── PANELS ─────────────────────────────────────────────────────────── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.8rem}
+.grid1{display:grid;grid-template-columns:1fr;gap:.8rem;margin-bottom:.8rem}
+.pnl{background:var(--s1);border:1px solid var(--edge);border-radius:var(--r);padding:1.05rem 1.2rem .85rem}
+.chart-box{position:relative;width:100%;height:340px}
+.pnl-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:.4rem}
+.pnl-t{font-family:'IBM Plex Mono',monospace;font-size:.65rem;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2)}
+.dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.d-g{background:var(--pos);box-shadow:0 0 5px var(--pos-glow)}
+.d-b{background:var(--blue);box-shadow:0 0 5px rgba(91,156,245,.25)}
+.d-o{background:var(--orange);box-shadow:0 0 5px rgba(240,156,91,.25)}
+.d-p{background:var(--purple);box-shadow:0 0 5px rgba(155,127,240,.25)}
 
-        .section-subtitle {
-            color: #718096;
-            font-size: 0.95rem;
-            margin-bottom: 20px;
-            font-style: italic;
-        }
+/* ── TABLE ──────────────────────────────────────────────────────────── */
+.tbl-box{background:var(--s1);border:1px solid var(--edge);border-radius:var(--r);padding:1.05rem 1.2rem;overflow-x:auto}
+table.t{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:.7rem}
+table.t th{
+  text-align:left;font-weight:500;color:var(--ink-mute);letter-spacing:.06em;text-transform:uppercase;
+  padding:.5rem .65rem;border-bottom:1px solid var(--edge-hi);font-size:.58rem;
+  position:sticky;top:0;background:var(--s1);
+}
+table.t th:not(:first-child){text-align:right}
+table.t td{padding:.45rem .65rem;border-bottom:1px solid var(--edge);color:var(--ink2);font-variant-numeric:tabular-nums}
+table.t td:not(:first-child){text-align:right}
+table.t td:first-child{color:var(--ink);font-weight:400;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.t tr:hover td{background:rgba(45,212,160,.02)}
+table.t tr:last-child td{border-bottom:none}
+.vp{color:var(--pos)}.vn{color:var(--neg)}
+tr.tot td{border-top:2px solid var(--edge-hi);font-weight:600;color:var(--ink)!important;padding-top:.6rem}
 
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            color: #2d3748;
-            font-weight: 500;
-            margin-bottom: 8px;
-            font-size: 0.95rem;
-        }
-
-        .label-with-tooltip {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .tooltip {
-            position: relative;
-            cursor: help;
-        }
-
-        .tooltip-icon {
-            background: #667eea;
-            color: white;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
-            font-weight: bold;
-        }
-
-        .tooltip-text {
-            visibility: hidden;
-            background-color: #2d3748;
-            color: white;
-            text-align: left;
-            border-radius: 8px;
-            padding: 12px;
-            position: absolute;
-            z-index: 1000;
-            bottom: 125%;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 280px;
-            font-size: 0.85rem;
-            font-weight: normal;
-            line-height: 1.4;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        }
-
-        .tooltip:hover .tooltip-text {
-            visibility: visible;
-        }
-
-        input[type="text"],
-        input[type="number"],
-        input[type="date"],
-        select,
-        textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            font-family: inherit;
-        }
-
-        input:focus,
-        select:focus,
-        textarea:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-
-        .toggle-group {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        .toggle-btn {
-            flex: 1;
-            padding: 12px 24px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            background: white;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            text-align: center;
-        }
-
-        .toggle-btn:hover {
-            border-color: #667eea;
-        }
-
-        .toggle-btn.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-color: #667eea;
-        }
-
-        .conditional-section {
-            display: none;
-            margin-top: 20px;
-            padding: 20px;
-            background: white;
-            border-radius: 8px;
-            border: 2px solid #e2e8f0;
-        }
-
-        .conditional-section.active {
-            display: block;
-            animation: slideDown 0.3s ease;
-        }
-
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .score-display {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 20px;
-            text-align: center;
-        }
-
-        .score-display h3 {
-            font-size: 1.2rem;
-            margin-bottom: 10px;
-        }
-
-        .score-value {
-            font-size: 2.5rem;
-            font-weight: bold;
-        }
-
-        .risk-indicator {
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 12px;
-            font-weight: 500;
-            text-align: center;
-        }
-
-        .risk-low {
-            background: #d4edda;
-            color: #155724;
-            border: 2px solid #c3e6cb;
-        }
-
-        .risk-moderate {
-            background: #fff3cd;
-            color: #856404;
-            border: 2px solid #ffeaa7;
-        }
-
-        .risk-high {
-            background: #f8d7da;
-            color: #721c24;
-            border: 2px solid #f5c6cb;
-        }
-
-        .risk-elite {
-            background: #cfe2ff;
-            color: #084298;
-            border: 2px solid #b6d4fe;
-        }
-
-        .grid-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        .fms-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-top: 20px;
-        }
-
-        .fms-item {
-            background: white;
-            padding: 16px;
-            border-radius: 8px;
-            border: 2px solid #e2e8f0;
-        }
-
-        .fms-item label {
-            font-size: 0.9rem;
-            margin-bottom: 8px;
-        }
-
-        .checkbox-group {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .checkbox-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px;
-            background: white;
-            border-radius: 8px;
-            border: 2px solid #e2e8f0;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .checkbox-item:hover {
-            border-color: #667eea;
-        }
-
-        .checkbox-item input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-        }
-
-        .submit-section {
-            text-align: center;
-            padding: 40px;
-            background: #f8f9fa;
-            margin-top: 40px;
-            border-radius: 12px;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 16px 48px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-secondary {
-            background: white;
-            color: #667eea;
-            padding: 16px 48px;
-            border: 2px solid #667eea;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-left: 12px;
-        }
-
-        .btn-secondary:hover {
-            background: #f8f9fa;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #e2e8f0;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-bottom: 30px;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.3s ease;
-        }
-
-        @media (max-width: 768px) {
-            .form-content {
-                padding: 20px;
-            }
-
-            .grid-2 {
-                grid-template-columns: 1fr;
-            }
-
-            .header {
-                padding: 24px;
-            }
-
-            .header h1 {
-                font-size: 1.5rem;
-            }
-
-            .btn-secondary {
-                margin-left: 0;
-                margin-top: 12px;
-                display: block;
-                width: 100%;
-            }
-        }
-
-        .info-box {
-            background: #e8f4fd;
-            border-left: 4px solid #667eea;
-            padding: 16px;
-            border-radius: 8px;
-            margin: 16px 0;
-            font-size: 0.95rem;
-            color: #2d3748;
-        }
-
-        .auto-calc {
-            background: #f0f4f8;
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 8px;
-            font-weight: 600;
-            color: #667eea;
-        }
-    </style>
+/* ── RESPONSIVE ─────────────────────────────────────────────────────── */
+@media(max-width:1024px){
+  .grid2{grid-template-columns:1fr 1fr}
+  .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+  .chart-box{height:300px}
+  .wrap{padding:1.1rem 1.4rem 2.5rem}
+}
+@media(max-width:768px){
+  .grid2{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:repeat(3,1fr)}
+  .chart-box{height:280px}
+  .wrap{padding:1rem}
+  header{padding:1.1rem 1rem .85rem;flex-direction:column;align-items:flex-start}
+  .hd-meta{text-align:left}
+  html{font-size:14px}
+  table.t{font-size:.67rem}
+  table.t th{font-size:.56rem}
+  .kpi-val{font-size:1.3rem}
+  .pnl-t{font-size:.6rem}
+}
+@media(max-width:480px){
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .chart-box{height:220px}
+  html{font-size:13px}
+  .kpi{padding:.85rem .9rem}
+  .kpi-val{font-size:1.1rem}
+  .kpi-lbl{font-size:.53rem}
+  .kpi-note{font-size:.55rem}
+  .pnl{padding:.8rem .85rem .65rem}
+  .pnl-t{font-size:.57rem}
+  .tbl-box{padding:.8rem .85rem}
+  table.t{font-size:.6rem}
+  table.t th{font-size:.5rem}
+  table.t td{padding:.35rem .4rem}
+  table.t th{padding:.35rem .4rem}
+  table.t td:first-child{max-width:120px}
+  .hd-brand{font-size:1rem}
+  .hd-brand em{font-size:.65rem}
+  .hd-sub{font-size:.58rem}
+  .wrap{padding:.7rem}
+  header{padding:.85rem .7rem .65rem}
+}
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🏃‍♂️ En-Vital Longevity Clinic</h1>
-            <p>Baseline Longevity Assessment</p>
-        </div>
 
-        <div class="form-content">
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressBar" style="width: 0%"></div>
-            </div>
-
-            <form id="longevityForm" action="https://formspree.io/f/mvzzgzeo" method="POST">
-                <!-- Hidden fields for better email formatting -->
-                <input type="hidden" name="_subject" value="New Baseline Metrics Submission">
-                <input type="hidden" name="_template" value="table">
-                <!-- Section 1: Basic Information -->
-                <div class="section-card">
-                    <div class="section-header">
-                        <h2><span class="section-number">1</span> Basic Information</h2>
-                    </div>
-                    
-                    <div class="grid-2">
-                        <div class="form-group">
-                            <label for="fullName">Full Name *</label>
-                            <input type="text" id="fullName" name="fullName" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="dob">Date of Birth *</label>
-                            <input type="date" id="dob" name="dob" required>
-                        </div>
-                    </div>
-
-                    <div class="grid-2">
-                        <div class="form-group">
-                            <label for="assessmentDate">Assessment Date</label>
-                            <input type="date" id="assessmentDate" name="assessmentDate">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="sex">Sex Assigned at Birth *</label>
-                            <select id="sex" name="sex" required>
-                                <option value="">Select...</option>
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                                <option value="prefer-not-say">Prefer not to say</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="auto-calc" id="ageDisplay" style="display: none;">
-                        Age: <span id="calculatedAge">-</span> years
-                    </div>
-                </div>
-
-                <!-- Section 2: Cardiovascular Fitness -->
-                <div class="section-card">
-                    <div class="section-header">
-                        <h2><span class="section-number">2</span> Cardiovascular Fitness</h2>
-                    </div>
-                    
-                    <div class="section-subtitle">
-                        VO₂ Max - Your Body's Engine Power
-                    </div>
-
-                    <div class="info-box">
-                        💡 Think of this as your body's horsepower - how efficiently you use oxygen during physical activity. This is the gold standard predictor of longevity.
-                    </div>
-
-                    <div class="form-group">
-                        <label>Do you have a VO₂ Max score?</label>
-                        <div class="toggle-group">
-                            <button type="button" class="toggle-btn" data-toggle="vo2MaxSection" data-value="yes">Yes</button>
-                            <button type="button" class="toggle-btn" data-toggle="vo2MaxSection" data-value="no">No</button>
-                        </div>
-                    </div>
-
-                    <div class="conditional-section" id="vo2MaxSection">
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label for="vo2MaxScore">Your VO₂ Max Score (ml/kg/min)</label>
-                                <input type="number" id="vo2MaxScore" name="vo2MaxScore" step="0.1" min="0">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="vo2MaxMethod">Testing Method</label>
-                                <select id="vo2MaxMethod" name="vo2MaxMethod">
-                                    <option value="">Select...</option>
-                                    <option value="lab">Professional lab test (gold standard)</option>
-                                    <option value="watch">Fitness watch estimate (Apple Watch, Garmin, etc.)</option>
-                                    <option value="gym">Gym equipment calculation</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div id="vo2MaxRisk" style="display: none;"></div>
-                    </div>
-                </div>
-
-                <!-- Section 3: Strength & Stability -->
-                <div class="section-card">
-                    <div class="section-header">
-                        <h2><span class="section-number">3</span> Strength & Stability</h2>
-                    </div>
-
-                    <!-- Grip Strength -->
-                    <div class="section-subtitle">Grip Strength Test</div>
-                    <div class="info-box">
-                        💪 A simple hand strength test that's surprisingly powerful at predicting overall health
-                    </div>
-
-                    <div class="form-group">
-                        <label>Have you completed a grip strength test?</label>
-                        <div class="toggle-group">
-                            <button type="button" class="toggle-btn" data-toggle="gripStrengthSection" data-value="yes">Yes</button>
-                            <button type="button" class="toggle-btn" data-toggle="gripStrengthSection" data-value="no">No</button>
-                        </div>
-                    </div>
-
-                    <div class="conditional-section" id="gripStrengthSection">
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label for="dominantHand">Dominant Hand</label>
-                                <select id="dominantHand" name="dominantHand">
-                                    <option value="">Select...</option>
-                                    <option value="right">Right</option>
-                                    <option value="left">Left</option>
-                                    <option value="ambidextrous">Ambidextrous</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="gripScore">Best Score from 3 Attempts (kg)</label>
-                                <input type="number" id="gripScore" name="gripScore" step="0.1" min="0">
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="gripDevice">Testing Device</label>
-                            <select id="gripDevice" name="gripDevice">
-                                <option value="">Select...</option>
-                                <option value="clinical">Hand dynamometer (clinical)</option>
-                                <option value="gym">Gym dynamometer</option>
-                                <option value="home">At-home device</option>
-                            </select>
-                        </div>
-
-                        <div id="gripStrengthRisk" style="display: none;"></div>
-                    </div>
-
-                    <!-- Balance Assessment -->
-                    <div class="section-subtitle" style="margin-top: 30px;">Balance Assessment - Single-Leg Stance</div>
-                    <div class="info-box">
-                        ⚖️ Standing on one leg for 10+ seconds is linked to 84% lower risk of early mortality
-                    </div>
-
-                    <div class="form-group">
-                        <label>Can you perform a balance test?</label>
-                        <div class="toggle-group">
-                            <button type="button" class="toggle-btn" data-toggle="balanceSection" data-value="yes">Yes</button>
-                            <button type="button" class="toggle-btn" data-toggle="balanceSection" data-value="no">No</button>
-                        </div>
-                    </div>
-
-                    <div class="conditional-section" id="balanceSection">
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label for="balanceLeg">Dominant Leg</label>
-                                <select id="balanceLeg" name="balanceLeg">
-                                    <option value="">Select...</option>
-                                    <option value="right">Right</option>
-                                    <option value="left">Left</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="balanceTime">Best Time from 2 Attempts (seconds)</label>
-                                <input type="number" id="balanceTime" name="balanceTime" step="0.1" min="0">
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Testing Position (confirm all):</label>
-                            <div class="checkbox-group">
-                                <label class="checkbox-item">
-                                    <input type="checkbox" name="balancePosition" value="12inches">
-                                    12 inches off ground
-                                </label>
-                                <label class="checkbox-item">
-                                    <input type="checkbox" name="balancePosition" value="handsOnHips">
-                                    Hands on hips
-                                </label>
-                                <label class="checkbox-item">
-                                    <input type="checkbox" name="balancePosition" value="eyesOpen">
-                                    Eyes open and forward
-                                </label>
-                            </div>
-                        </div>
-
-                        <div id="balanceRisk" style="display: none;"></div>
-                    </div>
-                </div>
-
-                <!-- Section 4: Movement Quality -->
-                <div class="section-card">
-                    <div class="section-header">
-                        <h2><span class="section-number">4</span> Movement Quality Assessment</h2>
-                    </div>
-
-                    <div class="section-subtitle">Functional Movement Screen (FMS)</div>
-                    <div class="info-box">
-                        🏃 7 fundamental movements that reveal injury risk and mobility limitations
-                    </div>
-
-                    <div class="form-group">
-                        <label>Have you completed an FMS assessment?</label>
-                        <div class="toggle-group">
-                            <button type="button" class="toggle-btn" data-toggle="fmsSection" data-value="yes">Yes</button>
-                            <button type="button" class="toggle-btn" data-toggle="fmsSection" data-value="no">No</button>
-                        </div>
-                    </div>
-
-                    <div class="conditional-section" id="fmsSection">
-                        <div class="info-box">
-                            <strong>Scoring Guide:</strong><br>
-                            3 = Performed perfectly<br>
-                            2 = Completed with compensation<br>
-                            1 = Unable to complete properly<br>
-                            0 = Pain during movement
-                        </div>
-
-                        <div class="fms-grid">
-                            <div class="fms-item">
-                                <label for="fmsSquat">1. Deep Squat</label>
-                                <select id="fmsSquat" name="fmsSquat" class="fms-input">
-                                    <option value="">-</option>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                </select>
-                                <small style="color: #718096;">Tests: hips, knees, ankles, shoulders</small>
-                            </div>
-
-                            <div class="fms-item">
-                                <label for="fmsLunge">2. In-Line Lunge</label>
-                                <select id="fmsLunge" name="fmsLunge" class="fms-input">
-                                    <option value="">-</option>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                </select>
-                                <small style="color: #718096;">Tests: deceleration & balance</small>
-                            </div>
-
-                            <div class="fms-item">
-                                <label for="fmsHurdleL">3. Hurdle Step - Left</label>
-                                <select id="fmsHurdleL" name="fmsHurdleL" class="fms-input">
-                                    <option value="">-</option>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                </select>
-                            </div>
-
-                            <div class="fms-item">
-                                <label for="fmsHurdleR">Hurdle Step - Right</label>
-                                <select id="fmsHurdleR" name="fmsHurdleR" class="fms-input">
-                                    <option value="">-</option>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                </select>
-                                <small style="color: #718096;">Tests: single-leg stability</small>
-                            </div>
-
-                            <div class="fms-item">
-                                <label for="fmsShoulderL">4. Shoulder Mobility - Left</label>
-                                <select id="fmsShoulderL" name="fmsShoulderL" class="fms-input">
-                                    <option value="">-</option>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                </select>
-                            </div>
-
-                            <div class="fms-item">
-                                <label for="fmsShoulderR">Shoulder Mobility - Right</label>
-                                <select id="fmsShoulderR" name="fmsShoulderR" class="fms-input">
-                                    <option value="">-</option>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                </select>
-                                <small style="color: #718096;">Tests: upper body flexibility</small>
-                            </div>
-
-                            <div class="fms-item">
-                                <label for="fmsHamstringL">5. Hamstring Raise - Left</label>
-                                <select id="fmsHamstringL" name="fmsHamstringL" class="fms-input">
-                                    <option value="">-</option>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                </select>
-                            </div>
-
-                            <div class="fms-item">
-                                <label for="fmsHamstringR">Hamstring Raise - Right</label>
-                                <select id="fmsHamstringR" name="fmsHamstringR" class="fms-input">
-                                    <option value="">-</option>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                </select>
-                                <small style="color: #718096;">Tests: core stability</small>
-                            </div>
-
-                            <div class="fms-item">
-                                <label for="fmsPushup">6. Trunk Stability Push-Up</label>
-                                <select id="fmsPushup" name="fmsPushup" class="fms-input">
-                                    <option value="">-</option>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                </select>
-                                <small style="color: #718096;">Tests: spine stability</small>
-                            </div>
-
-                            <div class="fms-item">
-                                <label for="fmsRotaryL">7. Rotary Stability - Left</label>
-                                <select id="fmsRotaryL" name="fmsRotaryL" class="fms-input">
-                                    <option value="">-</option>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                </select>
-                            </div>
-
-                            <div class="fms-item">
-                                <label for="fmsRotaryR">Rotary Stability - Right</label>
-                                <select id="fmsRotaryR" name="fmsRotaryR" class="fms-input">
-                                    <option value="">-</option>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                </select>
-                                <small style="color: #718096;">Tests: complex core control</small>
-                            </div>
-                        </div>
-
-                        <div class="score-display" id="fmsTotalScore" style="display: none;">
-                            <h3>Total FMS Score</h3>
-                            <div class="score-value"><span id="fmsTotal">0</span> / 21</div>
-                        </div>
-
-                        <div id="fmsRisk" style="display: none;"></div>
-                    </div>
-                </div>
-
-                <!-- Section 5: Body Composition -->
-                <div class="section-card">
-                    <div class="section-header">
-                        <h2><span class="section-number">5</span> Body Composition Analysis</h2>
-                    </div>
-
-                    <div class="section-subtitle">
-                        Where you store fat and how much muscle you have matters more than total weight
-                    </div>
-
-                    <div class="grid-2">
-                        <div class="form-group">
-                            <label for="weight">Weight</label>
-                            <input type="number" id="weight" name="weight" step="0.1" min="0">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="weightUnit">Unit</label>
-                            <select id="weightUnit" name="weightUnit">
-                                <option value="lbs">lbs</option>
-                                <option value="kg">kg</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="grid-2">
-                        <div class="form-group">
-                            <label for="height">Height</label>
-                            <input type="number" id="height" name="height" step="0.1" min="0">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="heightUnit">Unit</label>
-                            <select id="heightUnit" name="heightUnit">
-                                <option value="inches">inches</option>
-                                <option value="cm">cm</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="auto-calc" id="bmiDisplay" style="display: none;">
-                        BMI: <span id="calculatedBMI">-</span>
-                    </div>
-
-                    <div class="form-group" style="margin-top: 30px;">
-                        <label>Have you completed a body composition scan?</label>
-                        <div class="toggle-group">
-                            <button type="button" class="toggle-btn" data-toggle="bodyCompSection" data-value="yes">Yes</button>
-                            <button type="button" class="toggle-btn" data-toggle="bodyCompSection" data-value="no">No</button>
-                        </div>
-                    </div>
-
-                    <div class="conditional-section" id="bodyCompSection">
-                        <div class="form-group">
-                            <label for="scanMethod">Testing Method</label>
-                            <select id="scanMethod" name="scanMethod">
-                                <option value="">Select...</option>
-                                <option value="dxa">DXA scan (gold standard)</option>
-                                <option value="inbody">InBody (bioelectrical impedance)</option>
-                                <option value="manual">Manual measurements</option>
-                                <option value="smartscale">Smart scale</option>
-                                <option value="other">Other</option>
-                            </select>
-                        </div>
-
-                        <h3 style="margin: 30px 0 20px; color: #2d3748;">Fat Distribution Measurements</h3>
-                        
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label for="waist">Waist Circumference (inches/cm)</label>
-                                <input type="number" id="waist" name="waist" step="0.1" min="0">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="hip">Hip Circumference (inches/cm)</label>
-                                <input type="number" id="hip" name="hip" step="0.1" min="0">
-                            </div>
-                        </div>
-
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label for="upperArm">Upper Arm Circumference (inches/cm)</label>
-                                <input type="number" id="upperArm" name="upperArm" step="0.1" min="0">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="thigh">Thigh Circumference (inches/cm)</label>
-                                <input type="number" id="thigh" name="thigh" step="0.1" min="0">
-                            </div>
-                        </div>
-
-                        <div id="ratioDisplays"></div>
-
-                        <h3 style="margin: 30px 0 20px; color: #2d3748;">Body Composition Percentages</h3>
-                        
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label for="bodyFat">Body Fat %</label>
-                                <input type="number" id="bodyFat" name="bodyFat" step="0.1" min="0" max="100">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="muscleMass">Muscle Mass %</label>
-                                <input type="number" id="muscleMass" name="muscleMass" step="0.1" min="0" max="100">
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="alm">Appendicular Lean Mass % (ALM)</label>
-                            <input type="number" id="alm" name="alm" step="0.1" min="0" max="100">
-                        </div>
-
-                        <div id="bodyCompRisk"></div>
-                    </div>
-                </div>
-
-                <!-- Section 6: Metabolic & Bone Health -->
-                <div class="section-card">
-                    <div class="section-header">
-                        <h2><span class="section-number">6</span> Metabolic & Bone Health</h2>
-                    </div>
-
-                    <!-- RMR -->
-                    <div class="section-subtitle">Resting Metabolic Rate</div>
-                    <div class="info-box">
-                        🔥 Calories your body burns at complete rest
-                    </div>
-
-                    <div class="form-group">
-                        <label>Do you know your RMR?</label>
-                        <div class="toggle-group">
-                            <button type="button" class="toggle-btn" data-toggle="rmrSection" data-value="yes">Yes</button>
-                            <button type="button" class="toggle-btn" data-toggle="rmrSection" data-value="no">No</button>
-                        </div>
-                    </div>
-
-                    <div class="conditional-section" id="rmrSection">
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label for="rmrValue">RMR Value (kcal/day)</label>
-                                <input type="number" id="rmrValue" name="rmrValue" step="1" min="0">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="rmrMethod">Testing Method</label>
-                                <select id="rmrMethod" name="rmrMethod">
-                                    <option value="">Select...</option>
-                                    <option value="dxa">DXA scan</option>
-                                    <option value="metabolic">Metabolic cart</option>
-                                    <option value="calculated">Calculated estimate</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Bone Density -->
-                    <div class="section-subtitle" style="margin-top: 30px;">Bone Mineral Density</div>
-                    <div class="info-box">
-                        🦴 Bone strength is critical - hip fractures carry 20-30% mortality risk within one year
-                    </div>
-
-                    <div class="form-group">
-                        <label>Have you had a bone density scan?</label>
-                        <div class="toggle-group">
-                            <button type="button" class="toggle-btn" data-toggle="boneSection" data-value="yes">Yes</button>
-                            <button type="button" class="toggle-btn" data-toggle="boneSection" data-value="no">No</button>
-                        </div>
-                    </div>
-
-                    <div class="conditional-section" id="boneSection">
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label for="tScore">T-Score</label>
-                                <input type="number" id="tScore" name="tScore" step="0.1">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="boneDate">Testing Date</label>
-                                <input type="date" id="boneDate" name="boneDate">
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="scanLocation">Scan Location</label>
-                            <select id="scanLocation" name="scanLocation">
-                                <option value="">Select...</option>
-                                <option value="lumbar">Lumbar spine</option>
-                                <option value="hip">Hip</option>
-                                <option value="forearm">Forearm</option>
-                                <option value="fullbody">Full body</option>
-                            </select>
-                        </div>
-
-                        <div id="boneRisk" style="display: none;"></div>
-                    </div>
-                </div>
-
-                <!-- Section 7: Advanced Assessments -->
-                <div class="section-card">
-                    <div class="section-header">
-                        <h2><span class="section-number">7</span> Advanced Assessments</h2>
-                    </div>
-
-                    <div class="section-subtitle">
-                        Additional tests that provide deeper insights into your biological age and disease risk
-                    </div>
-
-                    <div class="form-group">
-                        <label>Select completed assessments:</label>
-                        <div class="checkbox-group">
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="advancedTests" value="genetic">
-                                <div>
-                                    <strong>Genetic Testing (MaxGen)</strong><br>
-                                    <small style="color: #718096;">Nutrigenomic profile, detoxification pathways, personalized nutrition</small>
-                                </div>
-                            </label>
-                            
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="advancedTests" value="biologicalAge">
-                                <div>
-                                    <strong>Biological Age Testing (TruAge)</strong><br>
-                                    <small style="color: #718096;">Epigenetic age vs chronological age</small>
-                                </div>
-                            </label>
-                            
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="advancedTests" value="bloodPanel">
-                                <div>
-                                    <strong>Comprehensive Blood Panel (Access Labs)</strong><br>
-                                    <small style="color: #718096;">Complete biomarker analysis</small>
-                                </div>
-                            </label>
-                            
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="advancedTests" value="cimt">
-                                <div>
-                                    <strong>Cardiovascular Imaging (CIMT)</strong><br>
-                                    <small style="color: #718096;">Carotid artery plaque assessment, early atherosclerosis detection</small>
-                                </div>
-                            </label>
-                            
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="advancedTests" value="cognitive">
-                                <div>
-                                    <strong>Cognitive Assessment (Lumosity)</strong><br>
-                                    <small style="color: #718096;">Baseline cognitive performance</small>
-                                </div>
-                            </label>
-                            
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="advancedTests" value="nutritional">
-                                <div>
-                                    <strong>Nutritional Physical Exam (NFPE)</strong><br>
-                                    <small style="color: #718096;">Hair, skin, nail, oral health assessment</small>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section 8: Wearable Data -->
-                <div class="section-card">
-                    <div class="section-header">
-                        <h2><span class="section-number">8</span> Wearable Device Data</h2>
-                    </div>
-
-                    <div class="section-subtitle">
-                        If you track health metrics with a wearable device
-                    </div>
-
-                    <div class="form-group">
-                        <label>Do you use a fitness tracker or smartwatch?</label>
-                        <div class="toggle-group">
-                            <button type="button" class="toggle-btn" data-toggle="wearableSection" data-value="yes">Yes</button>
-                            <button type="button" class="toggle-btn" data-toggle="wearableSection" data-value="no">No</button>
-                        </div>
-                    </div>
-
-                    <div class="conditional-section" id="wearableSection">
-                        <div class="form-group">
-                            <label for="deviceType">Device Type</label>
-                            <select id="deviceType" name="deviceType">
-                                <option value="">Select...</option>
-                                <option value="applewatch">Apple Watch</option>
-                                <option value="fitbit">Fitbit</option>
-                                <option value="garmin">Garmin</option>
-                                <option value="whoop">Whoop</option>
-                                <option value="oura">Oura Ring</option>
-                                <option value="other">Other</option>
-                            </select>
-                        </div>
-
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label for="restingHR">Resting Heart Rate (bpm)</label>
-                                <input type="number" id="restingHR" name="restingHR" step="1" min="0">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="maxHR">Max Heart Rate (bpm)</label>
-                                <input type="number" id="maxHR" name="maxHR" step="1" min="0">
-                            </div>
-                        </div>
-
-                        <div class="grid-2">
-                            <div class="form-group">
-                                <label for="hrv">HRV - Heart Rate Variability (ms)</label>
-                                <input type="number" id="hrv" name="hrv" step="1" min="0">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="sleepScore">Average Sleep Score (0-100)</label>
-                                <input type="number" id="sleepScore" name="sleepScore" step="1" min="0" max="100">
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="dailySteps">Average Daily Steps</label>
-                            <input type="number" id="dailySteps" name="dailySteps" step="1" min="0">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section 9: Goals & Priorities -->
-                <div class="section-card">
-                    <div class="section-header">
-                        <h2><span class="section-number">9</span> Your Goals & Priorities</h2>
-                    </div>
-
-                    <div class="form-group">
-                        <label>What matters most to you? (Select up to 3)</label>
-                        <div class="checkbox-group">
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="goals" value="independence" class="goal-checkbox">
-                                Living independently as long as possible
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="goals" value="strength" class="goal-checkbox">
-                                Maintaining physical strength and mobility
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="goals" value="bodycomp" class="goal-checkbox">
-                                Optimizing body composition
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="goals" value="cardiovascular" class="goal-checkbox">
-                                Improving cardiovascular fitness
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="goals" value="disease" class="goal-checkbox">
-                                Reducing disease risk
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="goals" value="cognitive" class="goal-checkbox">
-                                Enhancing cognitive function
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="goals" value="sleep" class="goal-checkbox">
-                                Better sleep quality
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="goals" value="injury" class="goal-checkbox">
-                                Injury prevention
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox" name="goals" value="performance" class="goal-checkbox">
-                                Athletic performance
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="additionalNotes">Additional Notes</label>
-                        <textarea id="additionalNotes" name="additionalNotes" placeholder="Share any concerns, health history, or context that would help us personalize your longevity plan..."></textarea>
-                    </div>
-                </div>
-
-                <!-- Submit Section -->
-                <div class="submit-section">
-                    <button type="submit" class="btn-primary">Submit Assessment</button>
-                    <button type="button" class="btn-secondary" onclick="window.print()">Download PDF</button>
-                </div>
-            </form>
-        </div>
+<!-- LOADING -->
+<div id="loader">
+  <div class="ld-brand">KORVEX</div>
+  <div class="ld-ring"></div>
+  <div class="ld-msg" id="ldMsg">Connecting to data source…</div>
+</div>
+
+<!-- ERROR -->
+<div id="errBox"></div>
+
+<!-- HEADER -->
+<header>
+  <div>
+    <div class="hd-brand">KORVEX<em>SPORTS INTEL</em></div>
+    <div class="hd-sub">NCAAB Spread Betting — Live Performance Dashboard</div>
+  </div>
+  <div class="hd-meta">
+    <div class="live-dot">Auto-updating from Google Sheets</div>
+    <div style="margin-top:2px">Refreshed: <b id="tsRefresh">—</b></div>
+    <div id="metaWindow">—</div>
+  </div>
+</header>
+
+<main class="wrap" id="main" style="display:none">
+  <section class="kpi-grid" id="kpiRow"></section>
+
+  <section class="grid2 anim" style="animation-delay:.12s">
+    <div class="pnl">
+      <div class="pnl-hd"><div class="pnl-t"><span class="dot d-g"></span>ROI by Bucket</div></div>
+      <div class="chart-box"><canvas id="cRoiBar"></canvas></div>
     </div>
+    <div class="pnl">
+      <div class="pnl-hd"><div class="pnl-t"><span class="dot d-b"></span>Win % by Bucket</div></div>
+      <div class="chart-box"><canvas id="cWpBar"></canvas></div>
+    </div>
+  </section>
 
-    <script>
-        // Auto-set today's date
-        document.getElementById('assessmentDate').valueAsDate = new Date();
+  <section class="grid2 anim" style="animation-delay:.2s">
+    <div class="pnl">
+      <div class="pnl-hd"><div class="pnl-t"><span class="dot d-o"></span>Total Profit by Bucket</div></div>
+      <div class="chart-box"><canvas id="cProfitBar"></canvas></div>
+    </div>
+    <div class="pnl">
+      <div class="pnl-hd"><div class="pnl-t"><span class="dot d-p"></span>Cumulative Profit Over Time</div></div>
+      <div class="chart-box"><canvas id="cCumLine"></canvas></div>
+    </div>
+  </section>
 
-        // Toggle button functionality
-        document.querySelectorAll('.toggle-btn').forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                const targetSection = this.dataset.toggle;
-                const value = this.dataset.value;
-                
-                // Remove active from siblings
-                this.parentElement.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
-                
-                // Add active to clicked
-                this.classList.add('active');
-                
-                // Show/hide conditional section
-                const section = document.getElementById(targetSection);
-                if (value === 'yes') {
-                    section.classList.add('active');
-                } else {
-                    section.classList.remove('active');
-                }
-                
-                updateProgress();
-            });
-        });
+  <section class="tbl-box anim" style="animation-delay:.28s">
+    <div class="pnl-hd" style="margin-bottom:.55rem">
+      <div class="pnl-t"><span class="dot d-g"></span>Bucket Performance Summary</div>
+    </div>
+    <table class="t"><thead><tr>
+      <th>Bucket</th><th>W</th><th>L</th><th>Total</th><th>Win %</th><th>ROI</th><th>Profit</th>
+    </tr></thead><tbody id="tblBody"></tbody></table>
+  </section>
+</main>
 
-        // Calculate age from DOB
-        document.getElementById('dob').addEventListener('change', function() {
-            const dob = new Date(this.value);
-            const today = new Date();
-            let age = today.getFullYear() - dob.getFullYear();
-            const m = today.getMonth() - dob.getMonth();
-            if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
-                age--;
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATA SOURCE — Your Google Sheets published CSV link
+   ═══════════════════════════════════════════════════════════════════════════ */
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0Hwi4t6xp8RkR6Mih7sHpkk0dbvJ9bIuAl46givUktGiCQy6UXCb73BrgdC_UjeIndiNSi9WZUv4O/pub?gid=1505757219&single=true&output=csv";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONSTANTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+const WIN_PAYOUT  = 909.09;  // profit on $1000 bet at -110
+const LOSS_COST   = 1000;
+const BREAK_EVEN  = 52.38;
+
+/* Ordered bucket list */
+const BUCKET_ORDER = [
+  "Fav -100 to -149 × 0-2 spread",
+  "Fav -150 to -199 × 0-4 spread",
+  "Fav -200 to -299 (all spreads)",
+  "Fav -300 to -499 (all spreads)",
+  "Fav -500+ (all spreads)",
+  "Dog +100-199 × 2.5-4 spreads",
+  "Dog +100-199 × 4.5-6 spreads",
+  "Dog +300-399 (all spreads)",
+  "Dog +400-499 (all spreads)",
+  "Dog +500-999 (all spreads)",
+  "Dog +1000+ (all spreads)",
+  "Gap games (positive spread + negative ML)",
+  "Fav Other",
+  "Dog Other"
+];
+
+/* Chart.js global defaults */
+Chart.defaults.color = "#6a6e84";
+Chart.defaults.borderColor = "rgba(26,29,44,0.6)";
+Chart.defaults.font.family = "'IBM Plex Mono','monospace'";
+Chart.defaults.font.size = 10;
+Chart.defaults.plugins.legend.display = false;
+Chart.defaults.animation = { duration: 800, easing: "easeOutQuart" };
+Chart.defaults.responsive = true;
+Chart.defaults.maintainAspectRatio = false;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CSV PARSER — handles quoted fields, commas inside quotes, etc.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function parseCSV(text) {
+  const rows = [];
+  let i = 0;
+  const len = text.length;
+
+  while (i < len) {
+    const row = [];
+    while (i < len) {
+      let val = "";
+      if (text[i] === '"') {
+        // Quoted field
+        i++;
+        while (i < len) {
+          if (text[i] === '"') {
+            if (i + 1 < len && text[i + 1] === '"') {
+              val += '"'; i += 2;
+            } else {
+              i++; break;
             }
-            
-            if (age > 0 && age < 150) {
-                document.getElementById('calculatedAge').textContent = age;
-                document.getElementById('ageDisplay').style.display = 'block';
-            }
-            updateProgress();
-        });
-
-        // Calculate BMI
-        function calculateBMI() {
-            const weight = parseFloat(document.getElementById('weight').value);
-            const height = parseFloat(document.getElementById('height').value);
-            const weightUnit = document.getElementById('weightUnit').value;
-            const heightUnit = document.getElementById('heightUnit').value;
-            
-            if (weight && height) {
-                let weightKg = weightUnit === 'lbs' ? weight * 0.453592 : weight;
-                let heightM = heightUnit === 'inches' ? height * 0.0254 : height / 100;
-                
-                const bmi = (weightKg / (heightM * heightM)).toFixed(1);
-                document.getElementById('calculatedBMI').textContent = bmi;
-                document.getElementById('bmiDisplay').style.display = 'block';
-            }
+          } else {
+            val += text[i]; i++;
+          }
         }
-
-        document.getElementById('weight').addEventListener('input', calculateBMI);
-        document.getElementById('height').addEventListener('input', calculateBMI);
-        document.getElementById('weightUnit').addEventListener('change', calculateBMI);
-        document.getElementById('heightUnit').addEventListener('change', calculateBMI);
-
-        // VO2 Max risk assessment
-        document.getElementById('vo2MaxScore').addEventListener('input', function() {
-            const score = parseFloat(this.value);
-            const riskDiv = document.getElementById('vo2MaxRisk');
-            
-            if (score) {
-                let riskClass = '';
-                let riskText = '';
-                
-                if (score < 30) {
-                    riskClass = 'risk-high';
-                    riskText = '🔴 High Risk Zone (15-29): Elevated risk of losing independence';
-                } else if (score < 50) {
-                    riskClass = 'risk-moderate';
-                    riskText = '🟡 Average Range (30-49): Typical for middle-aged adults';
-                } else if (score < 70) {
-                    riskClass = 'risk-low';
-                    riskText = '🟢 Longevity Protection Zone (50-69): Excellent fitness level';
-                } else {
-                    riskClass = 'risk-elite';
-                    riskText = '⭐ Elite Athlete Range (70+): Outstanding cardiovascular fitness';
-                }
-                
-                riskDiv.innerHTML = `<div class="risk-indicator ${riskClass}">${riskText}</div>`;
-                riskDiv.style.display = 'block';
-            }
-        });
-
-        // Grip strength assessment
-        document.getElementById('gripScore').addEventListener('input', function() {
-            const score = parseFloat(this.value);
-            const age = parseInt(document.getElementById('calculatedAge').textContent);
-            const sex = document.getElementById('sex').value;
-            const riskDiv = document.getElementById('gripStrengthRisk');
-            
-            if (score && age && sex) {
-                let comparison = '';
-                let avgRange = '';
-                
-                // Simplified age/sex comparison
-                if (sex === 'male') {
-                    if (age < 40) avgRange = '44-48 kg';
-                    else if (age < 50) avgRange = '42-46 kg';
-                    else if (age < 60) avgRange = '39-43 kg';
-                    else if (age < 70) avgRange = '35-40 kg';
-                    else avgRange = '30-35 kg';
-                } else if (sex === 'female') {
-                    if (age < 40) avgRange = '24-28 kg';
-                    else if (age < 50) avgRange = '23-27 kg';
-                    else if (age < 60) avgRange = '21-25 kg';
-                    else if (age < 70) avgRange = '18-22 kg';
-                    else avgRange = '15-20 kg';
-                }
-                
-                riskDiv.innerHTML = `<div class="risk-indicator risk-low">Average range for your age/sex: ${avgRange}</div>`;
-                riskDiv.style.display = 'block';
-            }
-        });
-
-        // Balance assessment
-        document.getElementById('balanceTime').addEventListener('input', function() {
-            const time = parseFloat(this.value);
-            const age = parseInt(document.getElementById('calculatedAge').textContent);
-            const riskDiv = document.getElementById('balanceRisk');
-            
-            if (time && age) {
-                let riskClass = '';
-                let riskText = '';
-                
-                if (time >= 10) {
-                    riskClass = 'risk-low';
-                    riskText = '✓ Excellent balance - associated with lower mortality risk';
-                } else {
-                    riskClass = 'risk-high';
-                    riskText = '⚠ Below 10 seconds - opportunity for balance improvement';
-                }
-                
-                riskDiv.innerHTML = `<div class="risk-indicator ${riskClass}">${riskText}</div>`;
-                riskDiv.style.display = 'block';
-            }
-        });
-
-        // FMS Score calculation
-        document.querySelectorAll('.fms-input').forEach(input => {
-            input.addEventListener('change', calculateFMSScore);
-        });
-
-        function calculateFMSScore() {
-            const scores = {
-                squat: parseInt(document.getElementById('fmsSquat').value) || 0,
-                lunge: parseInt(document.getElementById('fmsLunge').value) || 0,
-                hurdleL: parseInt(document.getElementById('fmsHurdleL').value) || 0,
-                hurdleR: parseInt(document.getElementById('fmsHurdleR').value) || 0,
-                shoulderL: parseInt(document.getElementById('fmsShoulderL').value) || 0,
-                shoulderR: parseInt(document.getElementById('fmsShoulderR').value) || 0,
-                hamstringL: parseInt(document.getElementById('fmsHamstringL').value) || 0,
-                hamstringR: parseInt(document.getElementById('fmsHamstringR').value) || 0,
-                pushup: parseInt(document.getElementById('fmsPushup').value) || 0,
-                rotaryL: parseInt(document.getElementById('fmsRotaryL').value) || 0,
-                rotaryR: parseInt(document.getElementById('fmsRotaryR').value) || 0
-            };
-            
-            // Take lower score for bilateral movements
-            const hurdle = Math.min(scores.hurdleL || 3, scores.hurdleR || 3);
-            const shoulder = Math.min(scores.shoulderL || 3, scores.shoulderR || 3);
-            const hamstring = Math.min(scores.hamstringL || 3, scores.hamstringR || 3);
-            const rotary = Math.min(scores.rotaryL || 3, scores.rotaryR || 3);
-            
-            const total = scores.squat + scores.lunge + hurdle + shoulder + hamstring + scores.pushup + rotary;
-            
-            if (total > 0) {
-                document.getElementById('fmsTotal').textContent = total;
-                document.getElementById('fmsTotalScore').style.display = 'block';
-                
-                const riskDiv = document.getElementById('fmsRisk');
-                if (total < 14) {
-                    riskDiv.innerHTML = '<div class="risk-indicator risk-high">🔴 Elevated Injury Risk (&lt;14): Consider movement screening and corrective exercises</div>';
-                } else {
-                    riskDiv.innerHTML = '<div class="risk-indicator risk-low">🟢 Low Injury Risk (15-21): Good movement quality</div>';
-                }
-                riskDiv.style.display = 'block';
-            }
+        if (i < len && text[i] === ',') i++;
+        else if (i < len && (text[i] === '\n' || text[i] === '\r')) {
+          if (text[i] === '\r' && i + 1 < len && text[i + 1] === '\n') i += 2; else i++;
+          row.push(val); break;
         }
-
-        // Body composition ratios
-        function calculateRatios() {
-            const waist = parseFloat(document.getElementById('waist').value);
-            const hip = parseFloat(document.getElementById('hip').value);
-            const height = parseFloat(document.getElementById('height').value);
-            const heightUnit = document.getElementById('heightUnit').value;
-            const ratioDiv = document.getElementById('ratioDisplays');
-            
-            let html = '';
-            
-            if (waist && hip) {
-                const whr = (waist / hip).toFixed(2);
-                const sex = document.getElementById('sex').value;
-                let whrRisk = '';
-                
-                if (sex === 'male') {
-                    whrRisk = whr <= 0.90 ? 'risk-low' : 'risk-high';
-                } else if (sex === 'female') {
-                    whrRisk = whr <= 0.85 ? 'risk-low' : 'risk-high';
-                }
-                
-                html += `<div class="auto-calc">Waist-to-Hip Ratio: ${whr}</div>`;
-                html += `<div class="risk-indicator ${whrRisk}">Target: Men ≤0.90, Women ≤0.85</div>`;
-            }
-            
-            if (waist && height) {
-                let heightInches = heightUnit === 'cm' ? height / 2.54 : height;
-                const whtr = (waist / heightInches).toFixed(2);
-                let whtrRisk = 'risk-low';
-                let whtrText = 'Ideal';
-                
-                if (whtr >= 0.6) {
-                    whtrRisk = 'risk-high';
-                    whtrText = 'High Risk';
-                } else if (whtr >= 0.5) {
-                    whtrRisk = 'risk-moderate';
-                    whtrText = 'Moderate Risk';
-                }
-                
-                html += `<div class="auto-calc" style="margin-top: 12px;">Waist-to-Height Ratio: ${whtr}</div>`;
-                html += `<div class="risk-indicator ${whtrRisk}">${whtrText}: Ideal &lt;0.5, Moderate 0.5-0.59, High Risk ≥0.6</div>`;
-            }
-            
-            ratioDiv.innerHTML = html;
+      } else {
+        // Unquoted field
+        const start = i;
+        while (i < len && text[i] !== ',' && text[i] !== '\n' && text[i] !== '\r') i++;
+        val = text.substring(start, i);
+        if (i < len && text[i] === ',') i++;
+        else if (i < len && (text[i] === '\n' || text[i] === '\r')) {
+          if (text[i] === '\r' && i + 1 < len && text[i + 1] === '\n') i += 2; else i++;
+          row.push(val); break;
+        } else {
+          // End of text
+          row.push(val); break;
         }
+      }
+      row.push(val);
+    }
+    if (row.length > 0 && !(row.length === 1 && row[0] === "")) rows.push(row);
+  }
+  return rows;
+}
 
-        document.getElementById('waist').addEventListener('input', calculateRatios);
-        document.getElementById('hip').addEventListener('input', calculateRatios);
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATA PROCESSING
+   ═══════════════════════════════════════════════════════════════════════════ */
+function findHeaderRow(rows) {
+  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    const lower = rows[i].map(c => c.trim().toLowerCase());
+    if (lower.includes("date") && (lower.includes("bucket name") || lower.includes("bucket"))) return i;
+  }
+  return -1;
+}
 
-        // T-Score assessment
-        document.getElementById('tScore').addEventListener('input', function() {
-            const tScore = parseFloat(this.value);
-            const riskDiv = document.getElementById('boneRisk');
-            
-            if (tScore) {
-                let riskClass = '';
-                let riskText = '';
-                
-                if (tScore >= -1.0) {
-                    riskClass = 'risk-low';
-                    riskText = '🟢 Normal (+1.0 to -1.0): Low Risk - Healthy bone density';
-                } else if (tScore >= -2.5) {
-                    riskClass = 'risk-moderate';
-                    riskText = '🟡 Osteopenia (-1.1 to -2.4): Moderate Risk - Early warning, consider intervention';
-                } else {
-                    riskClass = 'risk-high';
-                    riskText = '🔴 Osteoporosis (≤-2.5): High Risk - Fragility zone, immediate intervention needed';
-                }
-                
-                riskDiv.innerHTML = `<div class="risk-indicator ${riskClass}">${riskText}</div>`;
-                riskDiv.style.display = 'block';
-            }
-        });
+function parseDate(s) {
+  if (!s) return null;
+  s = s.trim();
+  // Handle multiple date formats
+  // MM/DD/YYYY, YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, M/D/YYYY
+  let d;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    d = new Date(s.split(" ")[0] + "T00:00:00");
+  } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+    const [m, day, y] = s.split("/");
+    d = new Date(+y, +m - 1, +day);
+  } else {
+    d = new Date(s);
+  }
+  return isNaN(d.getTime()) ? null : d;
+}
 
-        // Goal checkbox limiter
-        document.querySelectorAll('.goal-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', function() {
-                const checked = document.querySelectorAll('.goal-checkbox:checked');
-                if (checked.length > 3) {
-                    this.checked = false;
-                    alert('Please select up to 3 priorities');
-                }
-            });
-        });
+function processData(rows) {
+  const hIdx = findHeaderRow(rows);
+  if (hIdx < 0) throw new Error("Could not find header row with 'Date' and 'Bucket Name' columns.");
 
-        // Progress bar
-        function updateProgress() {
-            const form = document.getElementById('longevityForm');
-            const inputs = form.querySelectorAll('input[required], select[required]');
-            const toggles = form.querySelectorAll('.toggle-btn.active');
-            
-            let filled = 0;
-            inputs.forEach(input => {
-                if (input.value) filled++;
-            });
-            
-            const progress = Math.min(((filled / inputs.length) * 100), 100);
-            document.getElementById('progressBar').style.width = progress + '%';
+  const headers = rows[hIdx].map(h => h.trim());
+  const col = {};
+  headers.forEach((h, i) => { col[h.toLowerCase()] = i; });
+
+  const iDate   = col["date"];
+  const iBucket = col["bucket name"] ?? col["bucket"];
+  const iCover  = col["cover flag"] ?? col["coverflag"];
+  const iSpread = col["spread"];
+  const iOdds   = col["odds"];
+
+  if (iDate === undefined || iBucket === undefined || iCover === undefined) {
+    throw new Error("Missing required columns. Need: Date, Bucket Name, Cover Flag. Found: " + headers.join(", "));
+  }
+
+  const bets = [];
+  for (let r = hIdx + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row || row.length < 3) continue;
+
+    const dateStr  = row[iDate]?.trim();
+    const bucket   = row[iBucket]?.trim();
+    const coverRaw = row[iCover]?.trim();
+
+    if (!dateStr || !bucket || coverRaw === "" || coverRaw === undefined) continue;
+
+    const date = parseDate(dateStr);
+    if (!date) continue;
+
+    const cover  = parseInt(coverRaw, 10);
+    if (isNaN(cover)) continue;
+
+    const spread = iSpread !== undefined ? parseFloat(row[iSpread]) : null;
+    const odds   = iOdds !== undefined ? parseFloat(row[iOdds]) : null;
+
+    bets.push({ date, bucket, cover, spread, odds });
+  }
+
+  // Sort by date
+  bets.sort((a, b) => a.date - b.date);
+  return bets;
+}
+
+function computeStats(bets) {
+  // Bucket summary
+  const bucketMap = {};
+  bets.forEach(b => {
+    if (!bucketMap[b.bucket]) bucketMap[b.bucket] = { wins: 0, losses: 0 };
+    if (b.cover === 1) bucketMap[b.bucket].wins++;
+    else bucketMap[b.bucket].losses++;
+  });
+
+  // Order buckets
+  const allBuckets = [...new Set(bets.map(b => b.bucket))];
+  const ordered = BUCKET_ORDER.filter(b => allBuckets.includes(b));
+  const extra = allBuckets.filter(b => !BUCKET_ORDER.includes(b)).sort();
+  const buckets = [...ordered, ...extra];
+
+  const summary = buckets.map(name => {
+    const s = bucketMap[name] || { wins: 0, losses: 0 };
+    const total = s.wins + s.losses;
+    const winPct = total > 0 ? (s.wins / total) * 100 : 0;
+    const roi = total > 0 ? ((s.wins * WIN_PAYOUT - s.losses * LOSS_COST) / (total * LOSS_COST)) * 100 : 0;
+    const profit = s.wins * WIN_PAYOUT - s.losses * LOSS_COST;
+    return { name, wins: s.wins, losses: s.losses, total, winPct, roi, profit };
+  });
+
+  // Totals
+  const totW = summary.reduce((a, s) => a + s.wins, 0);
+  const totL = summary.reduce((a, s) => a + s.losses, 0);
+  const totN = totW + totL;
+  const totWp = totN > 0 ? (totW / totN) * 100 : 0;
+  const totRoi = totN > 0 ? ((totW * WIN_PAYOUT - totL * LOSS_COST) / (totN * LOSS_COST)) * 100 : 0;
+  const totProfit = totW * WIN_PAYOUT - totL * LOSS_COST;
+
+  const best = summary.reduce((a, b) => (b.total >= 2 && b.roi > a.roi ? b : a), { roi: -Infinity, name: "—" });
+  const worst = summary.reduce((a, b) => (b.total >= 2 && b.roi < a.roi ? b : a), { roi: Infinity, name: "—" });
+
+  // Cumulative profit by date
+  const cumByDate = [];
+  let running = 0;
+  const dateMap = new Map();
+  bets.forEach(b => {
+    running += b.cover === 1 ? WIN_PAYOUT : -LOSS_COST;
+    const key = b.date.toISOString().slice(0, 10);
+    dateMap.set(key, running);
+  });
+  dateMap.forEach((v, k) => cumByDate.push({ date: k, profit: v }));
+
+  // Date range
+  const minDate = bets.length > 0 ? bets[0].date : null;
+  const maxDate = bets.length > 0 ? bets[bets.length - 1].date : null;
+
+  return { summary, buckets, totW, totL, totN, totWp, totRoi, totProfit, best, worst, cumByDate, minDate, maxDate };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RENDERING
+   ═══════════════════════════════════════════════════════════════════════════ */
+function renderKPIs(stats) {
+  const grid = document.getElementById("kpiRow");
+  const cards = [
+    { label: "Total Bets", value: stats.totN.toLocaleString(), cls: "t-blue", vcls: "" },
+    { label: "Win %", value: stats.totWp.toFixed(1) + "%", cls: stats.totWp >= BREAK_EVEN ? "t-pos" : "t-neg", vcls: stats.totWp >= BREAK_EVEN ? "c-g" : "c-r" },
+    { label: "ROI", value: (stats.totRoi >= 0 ? "+" : "") + stats.totRoi.toFixed(1) + "%", cls: stats.totRoi >= 0 ? "t-pos" : "t-neg", vcls: stats.totRoi >= 0 ? "c-g" : "c-r" },
+    { label: "Total Profit", value: "$" + Math.round(stats.totProfit).toLocaleString(), cls: stats.totProfit >= 0 ? "t-pos" : "t-neg", vcls: stats.totProfit >= 0 ? "c-g" : "c-r",
+      note: `${stats.totW}W – ${stats.totL}L` },
+    { label: "Best ROI Bucket", value: "+" + stats.best.roi.toFixed(1) + "%", cls: "t-pos", vcls: "c-g",
+      note: shortBucket(stats.best.name) },
+    { label: "Worst ROI Bucket", value: stats.worst.roi.toFixed(1) + "%", cls: "t-neg", vcls: "c-r",
+      note: shortBucket(stats.worst.name) }
+  ];
+
+  grid.innerHTML = cards.map((c, i) =>
+    `<div class="kpi ${c.cls} anim" style="animation-delay:${i * .04}s">
+       <div class="kpi-lbl">${c.label}</div>
+       <div class="kpi-val ${c.vcls}">${c.value}</div>
+       ${c.note ? `<div class="kpi-note">${c.note}</div>` : ""}
+     </div>`
+  ).join("");
+}
+
+function shortBucket(name) {
+  // Compact name for KPI card display
+  return name.replace("(all spreads)", "(all)").replace("positive spread + negative ML", "+spread/−ML");
+}
+
+function renderTable(stats) {
+  const body = document.getElementById("tblBody");
+  let html = stats.summary.map(s => {
+    const wpCls = s.winPct >= BREAK_EVEN ? "vp" : "vn";
+    const roiCls = s.roi >= 0 ? "vp" : "vn";
+    const prCls = s.profit >= 0 ? "vp" : "vn";
+    return `<tr>
+      <td title="${s.name}">${s.name}</td>
+      <td>${s.wins}</td><td>${s.losses}</td><td>${s.total}</td>
+      <td class="${wpCls}">${s.winPct.toFixed(1)}%</td>
+      <td class="${roiCls}">${s.roi >= 0 ? "+" : ""}${s.roi.toFixed(1)}%</td>
+      <td class="${prCls}">$${Math.round(s.profit).toLocaleString()}</td>
+    </tr>`;
+  }).join("");
+
+  // Total row
+  const twcls = stats.totWp >= BREAK_EVEN ? "vp" : "vn";
+  const trcls = stats.totRoi >= 0 ? "vp" : "vn";
+  const tpcls = stats.totProfit >= 0 ? "vp" : "vn";
+  html += `<tr class="tot">
+    <td>TOTAL</td>
+    <td>${stats.totW}</td><td>${stats.totL}</td><td>${stats.totN}</td>
+    <td class="${twcls}">${stats.totWp.toFixed(1)}%</td>
+    <td class="${trcls}">${stats.totRoi >= 0 ? "+" : ""}${stats.totRoi.toFixed(1)}%</td>
+    <td class="${tpcls}">$${Math.round(stats.totProfit).toLocaleString()}</td>
+  </tr>`;
+  body.innerHTML = html;
+}
+
+/* ── CHART HELPERS ─────────────────────────────────────────────────── */
+const C = {
+  pos: "#2dd4a0", posBg: "rgba(45,212,160,0.65)",
+  neg: "#f4718a", negBg: "rgba(244,113,138,0.65)",
+  blue: "#5b9cf5", blueBg: "rgba(91,156,245,0.65)",
+  orange: "#f09c5b", orangeBg: "rgba(240,156,91,0.65)",
+  purple: "#9b7ff0", purpleBg: "rgba(155,127,240,0.65)",
+  grid: "rgba(26,29,44,0.8)",
+  gridLight: "rgba(40,43,62,0.5)"
+};
+
+function barColors(values, posColor, negColor) {
+  return values.map(v => v >= 0 ? posColor : negColor);
+}
+
+function shortLabel(name) {
+  return name
+    .replace("Fav -100 to -149 × 0-2 spread", "F −100/−149")
+    .replace("Fav -150 to -199 × 0-4 spread", "F −150/−199")
+    .replace("Fav -200 to -299 (all spreads)", "F −200/−299")
+    .replace("Fav -300 to -499 (all spreads)", "F −300/−499")
+    .replace("Fav -500+ (all spreads)", "F −500+")
+    .replace("Dog +100-199 × 2.5-4 spreads", "D +100/2.5–4")
+    .replace("Dog +100-199 × 4.5-6 spreads", "D +100/4.5–6")
+    .replace("Dog +300-399 (all spreads)", "D +300/+399")
+    .replace("Dog +400-499 (all spreads)", "D +400/+499")
+    .replace("Dog +500-999 (all spreads)", "D +500/+999")
+    .replace("Dog +1000+ (all spreads)", "D +1000+")
+    .replace("Gap games (positive spread + negative ML)", "Gap")
+    .replace("Fav Other", "F Other")
+    .replace("Dog Other", "D Other")
+    .replace(name, name.substring(0, 14));  // fallback
+}
+
+function makeScales(yLabel, pct) {
+  return {
+    x: {
+      grid: { color: C.grid, drawBorder: false },
+      ticks: { maxRotation: 55, minRotation: 35, font: { size: 9 } }
+    },
+    y: {
+      grid: { color: C.gridLight, drawBorder: false },
+      ticks: { callback: v => pct ? v.toFixed(0) + "%" : "$" + v.toLocaleString(), font: { size: 9 } },
+      title: { display: true, text: yLabel, color: "#6a6e84", font: { size: 10 } }
+    }
+  };
+}
+
+/* ── RENDER CHARTS ──────────────────────────────────────────────────── */
+function renderCharts(stats) {
+  const labels = stats.summary.map(s => shortLabel(s.name));
+  const roiVals = stats.summary.map(s => +s.roi.toFixed(2));
+  const wpVals = stats.summary.map(s => +s.winPct.toFixed(2));
+  const profitVals = stats.summary.map(s => Math.round(s.profit));
+
+  // ── ROI BAR ──
+  new Chart(document.getElementById("cRoiBar"), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        data: roiVals,
+        backgroundColor: barColors(roiVals, C.posBg, C.negBg),
+        borderColor: barColors(roiVals, C.pos, C.neg),
+        borderWidth: 1, borderRadius: 3, maxBarThickness: 38
+      }]
+    },
+    options: {
+      scales: makeScales("ROI %", true),
+      plugins: {
+        tooltip: {
+          callbacks: {
+            title: (items) => stats.summary[items[0].dataIndex].name,
+            label: (item) => "ROI: " + (item.raw >= 0 ? "+" : "") + item.raw.toFixed(1) + "%"
+          }
+        },
+        annotation: {
+          annotations: {
+            zero: { type: "line", yMin: 0, yMax: 0, borderColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderDash: [4, 4] }
+          }
         }
+      }
+    }
+  });
 
-        // Update progress on any input
-        document.querySelectorAll('input, select, textarea').forEach(el => {
-            el.addEventListener('change', updateProgress);
-            el.addEventListener('input', updateProgress);
-        });
+  // ── WIN % BAR ──
+  new Chart(document.getElementById("cWpBar"), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        data: wpVals,
+        backgroundColor: wpVals.map(v => v >= BREAK_EVEN ? C.blueBg : C.negBg),
+        borderColor: wpVals.map(v => v >= BREAK_EVEN ? C.blue : C.neg),
+        borderWidth: 1, borderRadius: 3, maxBarThickness: 38
+      }]
+    },
+    options: {
+      scales: makeScales("Win %", true),
+      plugins: {
+        tooltip: {
+          callbacks: {
+            title: (items) => stats.summary[items[0].dataIndex].name,
+            label: (item) => "Win %: " + item.raw.toFixed(1) + "%"
+          }
+        },
+        annotation: {
+          annotations: {
+            breakeven: {
+              type: "line", yMin: BREAK_EVEN, yMax: BREAK_EVEN,
+              borderColor: "rgba(245,197,66,0.5)", borderWidth: 1.5, borderDash: [6, 3],
+              label: {
+                display: true, content: "Break-even 52.38%", position: "start",
+                backgroundColor: "rgba(245,197,66,0.12)", color: "#f5c542",
+                font: { size: 9, family: "'IBM Plex Mono'" }, padding: 3
+              }
+            }
+          }
+        }
+      }
+    }
+  });
 
-        // Form submission
-        document.getElementById('longevityForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            // Create formatted summary
-            const formData = new FormData(this);
-            const data = {};
-            
-            // Collect all data
-            for (let [key, value] of formData.entries()) {
-                if (value) data[key] = value;
-            }
-            
-            // Create a formatted summary field
-            let summary = '=== BASELINE METRICS ASSESSMENT ===\n\n';
-            
-            // Basic Info
-            if (data.fullName || data.dob || data.sex) {
-                summary += '--- BASIC INFORMATION ---\n';
-                if (data.fullName) summary += `Name: ${data.fullName}\n`;
-                if (data.dob) summary += `Date of Birth: ${data.dob}\n`;
-                if (data.sex) summary += `Sex: ${data.sex}\n`;
-                summary += '\n';
-            }
-            
-            // VO2 Max
-            if (data.vo2MaxScore) {
-                summary += '--- CARDIOVASCULAR FITNESS ---\n';
-                summary += `VO2 Max Score: ${data.vo2MaxScore} ml/kg/min\n`;
-                if (data.vo2MaxMethod) summary += `Testing Method: ${data.vo2MaxMethod}\n`;
-                summary += '\n';
-            }
-            
-            // Grip Strength
-            if (data.gripScore) {
-                summary += '--- GRIP STRENGTH ---\n';
-                summary += `Score: ${data.gripScore} kg\n`;
-                if (data.dominantHand) summary += `Dominant Hand: ${data.dominantHand}\n`;
-                if (data.gripDevice) summary += `Device: ${data.gripDevice}\n`;
-                summary += '\n';
-            }
-            
-            // Balance
-            if (data.balanceTime) {
-                summary += '--- BALANCE TEST ---\n';
-                summary += `Single-Leg Stance: ${data.balanceTime} seconds\n`;
-                if (data.balanceLeg) summary += `Leg: ${data.balanceLeg}\n`;
-                summary += '\n';
-            }
-            
-            // FMS Score
-            const fmsScores = [
-                data.fmsSquat, data.fmsLunge, 
-                Math.min(data.fmsHurdleL || 3, data.fmsHurdleR || 3),
-                Math.min(data.fmsShoulderL || 3, data.fmsShoulderR || 3),
-                Math.min(data.fmsHamstringL || 3, data.fmsHamstringR || 3),
-                data.fmsPushup,
-                Math.min(data.fmsRotaryL || 3, data.fmsRotaryR || 3)
-            ];
-            const fmsTotal = fmsScores.filter(s => s).reduce((a, b) => parseInt(a || 0) + parseInt(b || 0), 0);
-            
-            if (fmsTotal > 0) {
-                summary += '--- FUNCTIONAL MOVEMENT SCREEN ---\n';
-                summary += `Total FMS Score: ${fmsTotal}/21\n`;
-                if (data.fmsSquat) summary += `Deep Squat: ${data.fmsSquat}\n`;
-                if (data.fmsLunge) summary += `In-Line Lunge: ${data.fmsLunge}\n`;
-                if (data.fmsHurdleL || data.fmsHurdleR) summary += `Hurdle Step: ${Math.min(data.fmsHurdleL || 3, data.fmsHurdleR || 3)}\n`;
-                if (data.fmsShoulderL || data.fmsShoulderR) summary += `Shoulder Mobility: ${Math.min(data.fmsShoulderL || 3, data.fmsShoulderR || 3)}\n`;
-                if (data.fmsHamstringL || data.fmsHamstringR) summary += `Hamstring Raise: ${Math.min(data.fmsHamstringL || 3, data.fmsHamstringR || 3)}\n`;
-                if (data.fmsPushup) summary += `Push-Up: ${data.fmsPushup}\n`;
-                if (data.fmsRotaryL || data.fmsRotaryR) summary += `Rotary Stability: ${Math.min(data.fmsRotaryL || 3, data.fmsRotaryR || 3)}\n`;
-                summary += '\n';
-            }
-            
-            // Body Composition
-            if (data.weight || data.height) {
-                summary += '--- BODY COMPOSITION ---\n';
-                if (data.weight) summary += `Weight: ${data.weight} ${data.weightUnit || 'lbs'}\n`;
-                if (data.height) summary += `Height: ${data.height} ${data.heightUnit || 'inches'}\n`;
-                
-                // Calculate BMI
-                if (data.weight && data.height) {
-                    let weightKg = data.weightUnit === 'kg' ? parseFloat(data.weight) : parseFloat(data.weight) * 0.453592;
-                    let heightM = data.heightUnit === 'cm' ? parseFloat(data.height) / 100 : parseFloat(data.height) * 0.0254;
-                    let bmi = (weightKg / (heightM * heightM)).toFixed(1);
-                    summary += `BMI: ${bmi}\n`;
-                }
-                
-                if (data.waist) summary += `Waist: ${data.waist}\n`;
-                if (data.hip) summary += `Hip: ${data.hip}\n`;
-                if (data.bodyFat) summary += `Body Fat %: ${data.bodyFat}\n`;
-                if (data.muscleMass) summary += `Muscle Mass %: ${data.muscleMass}\n`;
-                if (data.alm) summary += `ALM %: ${data.alm}\n`;
-                summary += '\n';
-            }
-            
-            // Metabolic
-            if (data.rmrValue) {
-                summary += '--- METABOLIC RATE ---\n';
-                summary += `RMR: ${data.rmrValue} kcal/day\n`;
-                if (data.rmrMethod) summary += `Method: ${data.rmrMethod}\n`;
-                summary += '\n';
-            }
-            
-            // Bone Density
-            if (data.tScore) {
-                summary += '--- BONE DENSITY ---\n';
-                summary += `T-Score: ${data.tScore}\n`;
-                if (data.scanLocation) summary += `Location: ${data.scanLocation}\n`;
-                if (data.boneDate) summary += `Date: ${data.boneDate}\n`;
-                summary += '\n';
-            }
-            
-            // Advanced Tests
-            if (data.advancedTests) {
-                summary += '--- ADVANCED ASSESSMENTS ---\n';
-                const tests = Array.isArray(data.advancedTests) ? data.advancedTests : [data.advancedTests];
-                summary += tests.join(', ') + '\n\n';
-            }
-            
-            // Wearable Data
-            if (data.deviceType) {
-                summary += '--- WEARABLE DATA ---\n';
-                summary += `Device: ${data.deviceType}\n`;
-                if (data.restingHR) summary += `Resting HR: ${data.restingHR} bpm\n`;
-                if (data.maxHR) summary += `Max HR: ${data.maxHR} bpm\n`;
-                if (data.hrv) summary += `HRV: ${data.hrv} ms\n`;
-                if (data.sleepScore) summary += `Sleep Score: ${data.sleepScore}\n`;
-                if (data.dailySteps) summary += `Daily Steps: ${data.dailySteps}\n`;
-                summary += '\n';
-            }
-            
-            // Goals
-            if (data.goals) {
-                summary += '--- LONGEVITY GOALS ---\n';
-                const goals = Array.isArray(data.goals) ? data.goals : [data.goals];
-                goals.forEach(goal => summary += `• ${goal}\n`);
-                if (data.additionalNotes) summary += `\nNotes: ${data.additionalNotes}\n`;
-                summary += '\n';
-            }
-            
-            // Add formatted summary to form
-            const summaryInput = document.createElement('input');
-            summaryInput.type = 'hidden';
-            summaryInput.name = '📊_FORMATTED_SUMMARY';
-            summaryInput.value = summary;
-            this.appendChild(summaryInput);
-            
-            // Show loading state
-            const submitBtn = this.querySelector('.btn-primary');
-            submitBtn.textContent = 'Submitting...';
-            submitBtn.disabled = true;
-            
-            // Submit form
-            this.submit();
-        });
+  // ── PROFIT BAR ──
+  new Chart(document.getElementById("cProfitBar"), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        data: profitVals,
+        backgroundColor: barColors(profitVals, C.orangeBg, C.negBg),
+        borderColor: barColors(profitVals, C.orange, C.neg),
+        borderWidth: 1, borderRadius: 3, maxBarThickness: 38
+      }]
+    },
+    options: {
+      scales: makeScales("Profit ($)", false),
+      plugins: {
+        tooltip: {
+          callbacks: {
+            title: (items) => stats.summary[items[0].dataIndex].name,
+            label: (item) => "Profit: $" + item.raw.toLocaleString()
+          }
+        },
+        annotation: {
+          annotations: {
+            zero: { type: "line", yMin: 0, yMax: 0, borderColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderDash: [4, 4] }
+          }
+        }
+      }
+    }
+  });
 
-        // Initialize
-        updateProgress();
-    </script>
+  // ── CUMULATIVE PROFIT LINE ──
+  new Chart(document.getElementById("cCumLine"), {
+    type: "line",
+    data: {
+      labels: stats.cumByDate.map(d => d.date),
+      datasets: [{
+        data: stats.cumByDate.map(d => Math.round(d.profit)),
+        borderColor: C.purple,
+        backgroundColor: C.purpleBg.replace("0.65", "0.08"),
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2.5,
+        pointBackgroundColor: C.purple,
+        pointBorderColor: "transparent",
+        borderWidth: 2
+      }]
+    },
+    options: {
+      scales: {
+        x: {
+          grid: { color: C.grid, drawBorder: false },
+          ticks: { maxRotation: 40, font: { size: 9 }, maxTicksLimit: 15 }
+        },
+        y: {
+          grid: { color: C.gridLight, drawBorder: false },
+          ticks: { callback: v => "$" + v.toLocaleString(), font: { size: 9 } },
+          title: { display: true, text: "Cumulative Profit ($)", color: "#6a6e84", font: { size: 10 } }
+        }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: { label: (item) => "Profit: $" + item.raw.toLocaleString() }
+        },
+        annotation: {
+          annotations: {
+            zero: { type: "line", yMin: 0, yMax: 0, borderColor: "rgba(255,255,255,0.1)", borderWidth: 1, borderDash: [4, 4] }
+          }
+        }
+      }
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   META
+   ═══════════════════════════════════════════════════════════════════════════ */
+function renderMeta(stats) {
+  const now = new Date();
+  document.getElementById("tsRefresh").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (stats.minDate && stats.maxDate) {
+    const fmt = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    document.getElementById("metaWindow").innerHTML =
+      `Window: <b>${fmt(stats.minDate)}</b> – <b>${fmt(stats.maxDate)}</b> · ${stats.totN} bets`;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════════════════════════════════════ */
+async function boot() {
+  const loader = document.getElementById("loader");
+  const ldMsg  = document.getElementById("ldMsg");
+  const errBox = document.getElementById("errBox");
+
+  try {
+    ldMsg.textContent = "Fetching live data from Google Sheets…";
+
+    /* Try multiple fetch strategies — direct first, then CORS proxies as fallbacks */
+    const strategies = [
+      { name: "Direct", url: SHEET_URL },
+      { name: "corsproxy.io", url: "https://corsproxy.io/?" + encodeURIComponent(SHEET_URL) },
+      { name: "allorigins", url: "https://api.allorigins.win/raw?url=" + encodeURIComponent(SHEET_URL) },
+      { name: "corsproxy.org", url: "https://corsproxy.org/?" + encodeURIComponent(SHEET_URL) },
+    ];
+
+    let resp = null;
+    let lastErr = null;
+    let usedStrategy = "";
+
+    for (const strat of strategies) {
+      try {
+        ldMsg.textContent = `Trying ${strat.name}…`;
+        const r = await fetch(strat.url, { signal: AbortSignal.timeout(10000) });
+        if (r.ok) { resp = r; usedStrategy = strat.name; break; }
+      } catch (e) { lastErr = e; }
+    }
+
+    if (!resp) throw new Error(
+      "All fetch methods failed. Last error: " + (lastErr?.message || "Unknown") +
+      "\\n\\nTroubleshooting:\\n• Verify the Google Sheet is published (File → Share → Publish to web → CSV)\\n• Try opening the CSV URL directly in your browser:\\n" + SHEET_URL
+    );
+
+    ldMsg.textContent = "Parsing CSV…";
+    const text = await resp.text();
+    const rows = parseCSV(text);
+
+    if (rows.length < 2) throw new Error("CSV appears empty — check your published link.");
+
+    ldMsg.textContent = "Computing analytics…";
+    const bets = processData(rows);
+    if (bets.length === 0) throw new Error("No valid bet rows found. Check columns: Date, Bucket Name, Cover Flag.");
+
+    const stats = computeStats(bets);
+
+    ldMsg.textContent = "Rendering dashboard…";
+    await new Promise(r => setTimeout(r, 100)); // let the UI breathe
+
+    document.getElementById("main").style.display = "block";
+    renderKPIs(stats);
+    renderTable(stats);
+    renderCharts(stats);
+    renderMeta(stats);
+
+    loader.classList.add("done");
+  } catch (err) {
+    loader.classList.add("done");
+    errBox.style.display = "block";
+    errBox.innerHTML = `<strong>Data Error</strong><br>${err.message}<br><br>
+      <span style="color:var(--ink3)">Make sure your Google Sheet is published to the web as CSV and the URL is correct.
+      <br>Google Sheets → File → Share → Publish to web → select the correct tab → CSV → Publish</span>`;
+    console.error(err);
+  }
+}
+
+boot();
+</script>
 </body>
 </html>
