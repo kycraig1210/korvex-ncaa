@@ -264,7 +264,7 @@ tr.tot td{border-top:2px solid var(--edge-hi);font-weight:600;color:var(--ink)!i
       <div class="chart-box"><canvas id="cProfitBar"></canvas></div>
     </div>
     <div class="pnl">
-      <div class="pnl-hd"><div class="pnl-t"><span class="dot d-p"></span>Cumulative Profit Over Time</div></div>
+      <div class="pnl-hd"><div class="pnl-t"><span class="dot d-p"></span>Cumulative Profit by Bucket</div></div>
       <div class="chart-box"><canvas id="cCumLine"></canvas></div>
     </div>
   </section>
@@ -279,36 +279,14 @@ tr.tot td{border-top:2px solid var(--edge-hi);font-weight:600;color:var(--ink)!i
   </section>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
-   DATA SOURCE — Your Google Sheets published CSV link
+   DATA SOURCE — Summary tab from Google Sheets
    ═══════════════════════════════════════════════════════════════════════════ */
-const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0Hwi4t6xp8RkR6Mih7sHpkk0dbvJ9bIuAl46givUktGiCQy6UXCb73BrgdC_UjeIndiNSi9WZUv4O/pub?gid=1505757219&single=true&output=csv";
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0Hwi4t6xp8RkR6Mih7sHpkk0dbvJ9bIuAl46givUktGiCQy6UXCb73BrgdC_UjeIndiNSi9WZUv4O/pub?gid=2059810443&single=true&output=csv";
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   CONSTANTS
-   ═══════════════════════════════════════════════════════════════════════════ */
-const WIN_PAYOUT  = 909.09;  // profit on $1000 bet at -110
-const LOSS_COST   = 1000;
-const BREAK_EVEN  = 52.38;
-
-/* Ordered bucket list */
-const BUCKET_ORDER = [
-  "Fav -100 to -149 × 0-2 spread",
-  "Fav -150 to -199 × 0-4 spread",
-  "Fav -200 to -299 (all spreads)",
-  "Fav -300 to -499 (all spreads)",
-  "Fav -500+ (all spreads)",
-  "Dog +100-199 × 2.5-4 spreads",
-  "Dog +100-199 × 4.5-6 spreads",
-  "Dog +300-399 (all spreads)",
-  "Dog +400-499 (all spreads)",
-  "Dog +500-999 (all spreads)",
-  "Dog +1000+ (all spreads)",
-  "Gap games (positive spread + negative ML)",
-  "Fav Other",
-  "Dog Other"
-];
+const BREAK_EVEN = 52.38;
 
 /* Chart.js global defaults */
 Chart.defaults.color = "#6a6e84";
@@ -321,182 +299,123 @@ Chart.defaults.responsive = true;
 Chart.defaults.maintainAspectRatio = false;
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   CSV PARSER — handles quoted fields, commas inside quotes, etc.
+   CSV FETCH + PARSE via PapaParse
    ═══════════════════════════════════════════════════════════════════════════ */
-function parseCSV(text) {
-  const rows = [];
-  let i = 0;
-  const len = text.length;
+async function fetchCSV(url) {
+  /* Fallback chain: direct → corsproxy.io → allorigins → corsproxy.org */
+  const strategies = [
+    { name: "Direct",        url: url },
+    { name: "corsproxy.io",  url: "https://corsproxy.io/?" + encodeURIComponent(url) },
+    { name: "allorigins",    url: "https://api.allorigins.win/raw?url=" + encodeURIComponent(url) },
+    { name: "corsproxy.org", url: "https://corsproxy.org/?" + encodeURIComponent(url) },
+  ];
 
-  while (i < len) {
-    const row = [];
-    while (i < len) {
-      let val = "";
-      if (text[i] === '"') {
-        // Quoted field
-        i++;
-        while (i < len) {
-          if (text[i] === '"') {
-            if (i + 1 < len && text[i + 1] === '"') {
-              val += '"'; i += 2;
-            } else {
-              i++; break;
-            }
-          } else {
-            val += text[i]; i++;
-          }
-        }
-        if (i < len && text[i] === ',') i++;
-        else if (i < len && (text[i] === '\n' || text[i] === '\r')) {
-          if (text[i] === '\r' && i + 1 < len && text[i + 1] === '\n') i += 2; else i++;
-          row.push(val); break;
-        }
-      } else {
-        // Unquoted field
-        const start = i;
-        while (i < len && text[i] !== ',' && text[i] !== '\n' && text[i] !== '\r') i++;
-        val = text.substring(start, i);
-        if (i < len && text[i] === ',') i++;
-        else if (i < len && (text[i] === '\n' || text[i] === '\r')) {
-          if (text[i] === '\r' && i + 1 < len && text[i + 1] === '\n') i += 2; else i++;
-          row.push(val); break;
-        } else {
-          // End of text
-          row.push(val); break;
-        }
-      }
-      row.push(val);
-    }
-    if (row.length > 0 && !(row.length === 1 && row[0] === "")) rows.push(row);
+  const ldMsg = document.getElementById("ldMsg");
+  let lastErr = null;
+
+  for (const strat of strategies) {
+    try {
+      ldMsg.textContent = `Trying ${strat.name}…`;
+      const r = await fetch(strat.url, { signal: AbortSignal.timeout(10000) });
+      if (r.ok) return await r.text();
+    } catch (e) { lastErr = e; }
   }
-  return rows;
+
+  throw new Error(
+    "All fetch methods failed. Last error: " + (lastErr?.message || "Unknown") +
+    "\n\nVerify the sheet is published: File → Share → Publish to web → CSV"
+  );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   DATA PROCESSING
+   DATA PROCESSING — Read pre-computed summary from CSV
    ═══════════════════════════════════════════════════════════════════════════ */
-function findHeaderRow(rows) {
-  for (let i = 0; i < Math.min(rows.length, 15); i++) {
-    const lower = rows[i].map(c => c.trim().toLowerCase());
-    if (lower.includes("date") && (lower.includes("bucket name") || lower.includes("bucket"))) return i;
+function processCSV(csvText) {
+  const parsed = Papa.parse(csvText, {
+    header: false,
+    skipEmptyLines: true,
+    dynamicTyping: false
+  });
+
+  const rows = parsed.data;
+  if (!rows || rows.length < 2) throw new Error("CSV appears empty.");
+
+  /* Find the header row — look for "Description" or "Bucket" in first 20 rows */
+  let hIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    const lower = rows[i].map(c => (c || "").trim().toLowerCase());
+    if (lower.includes("description") || lower.includes("bucket") || lower.includes("bucket name")) {
+      hIdx = i;
+      break;
+    }
   }
-  return -1;
-}
+  if (hIdx < 0) throw new Error("Could not find header row with 'Description' column. Found: " + rows[0].join(", "));
 
-function parseDate(s) {
-  if (!s) return null;
-  s = s.trim();
-  // Handle multiple date formats
-  // MM/DD/YYYY, YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, M/D/YYYY
-  let d;
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-    d = new Date(s.split(" ")[0] + "T00:00:00");
-  } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
-    const [m, day, y] = s.split("/");
-    d = new Date(+y, +m - 1, +day);
-  } else {
-    d = new Date(s);
-  }
-  return isNaN(d.getTime()) ? null : d;
-}
+  /* Map column indices by fuzzy-matching header names */
+  const hdr = rows[hIdx].map(c => (c || "").trim().toLowerCase());
+  const col = (needles) => {
+    for (const n of needles) {
+      const idx = hdr.findIndex(h => h.includes(n));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
 
-function processData(rows) {
-  const hIdx = findHeaderRow(rows);
-  if (hIdx < 0) throw new Error("Could not find header row with 'Date' and 'Bucket Name' columns.");
+  const iDesc   = col(["description", "bucket name", "bucket"]);
+  const iWins   = col(["wins", "win"]);
+  const iLosses = col(["losses", "loss"]);
+  const iTotal  = col(["total"]);
+  const iWinPct = col(["% win", "win %", "win%", "winpct"]);
+  const iROI    = col(["roi"]);
+  const iProfit = col(["profit"]);
 
-  const headers = rows[hIdx].map(h => h.trim());
-  const col = {};
-  headers.forEach((h, i) => { col[h.toLowerCase()] = i; });
+  if (iDesc < 0) throw new Error("Missing 'Description' column. Headers found: " + hdr.join(", "));
 
-  const iDate   = col["date"];
-  const iBucket = col["bucket name"] ?? col["bucket"];
-  const iCover  = col["cover flag"] ?? col["coverflag"];
-  const iSpread = col["spread"];
-  const iOdds   = col["odds"];
-
-  if (iDate === undefined || iBucket === undefined || iCover === undefined) {
-    throw new Error("Missing required columns. Need: Date, Bucket Name, Cover Flag. Found: " + headers.join(", "));
-  }
-
-  const bets = [];
+  /* Parse each data row */
+  const summary = [];
   for (let r = hIdx + 1; r < rows.length; r++) {
     const row = rows[r];
-    if (!row || row.length < 3) continue;
+    const name = (row[iDesc] || "").trim();
+    if (!name) continue;
 
-    const dateStr  = row[iDate]?.trim();
-    const bucket   = row[iBucket]?.trim();
-    const coverRaw = row[iCover]?.trim();
+    /* Skip rows that look like totals — we compute our own */
+    if (/^total$/i.test(name) || /^grand total$/i.test(name) || /^overall$/i.test(name)) continue;
 
-    if (!dateStr || !bucket || coverRaw === "" || coverRaw === undefined) continue;
+    const parseNum = (idx) => {
+      if (idx < 0 || idx >= row.length) return 0;
+      let v = (row[idx] || "").trim();
+      v = v.replace(/[$,%]/g, "").replace(/[()]/g, m => m === "(" ? "-" : "");
+      const n = parseFloat(v);
+      return isNaN(n) ? 0 : n;
+    };
 
-    const date = parseDate(dateStr);
-    if (!date) continue;
+    const wins   = Math.round(parseNum(iWins));
+    const losses = Math.round(parseNum(iLosses));
+    const total  = iTotal >= 0 ? Math.round(parseNum(iTotal)) : wins + losses;
+    const winPct = iWinPct >= 0 ? parseNum(iWinPct) : (total > 0 ? (wins / total) * 100 : 0);
+    /* Normalize: if winPct looks like a fraction (0.567), convert to percentage */
+    const winPctNorm = winPct > 0 && winPct < 1 ? winPct * 100 : winPct;
+    const roi    = iROI >= 0 ? parseNum(iROI) : 0;
+    const roiNorm = roi > 0 && roi < 1 ? roi * 100 : (roi < 0 && roi > -1 ? roi * 100 : roi);
+    const profit = iProfit >= 0 ? parseNum(iProfit) : 0;
 
-    const cover  = parseInt(coverRaw, 10);
-    if (isNaN(cover)) continue;
-
-    const spread = iSpread !== undefined ? parseFloat(row[iSpread]) : null;
-    const odds   = iOdds !== undefined ? parseFloat(row[iOdds]) : null;
-
-    bets.push({ date, bucket, cover, spread, odds });
+    summary.push({ name, wins, losses, total, winPct: winPctNorm, roi: roiNorm, profit });
   }
 
-  // Sort by date
-  bets.sort((a, b) => a.date - b.date);
-  return bets;
-}
+  if (summary.length === 0) throw new Error("No valid bucket rows found after header.");
 
-function computeStats(bets) {
-  // Bucket summary
-  const bucketMap = {};
-  bets.forEach(b => {
-    if (!bucketMap[b.bucket]) bucketMap[b.bucket] = { wins: 0, losses: 0 };
-    if (b.cover === 1) bucketMap[b.bucket].wins++;
-    else bucketMap[b.bucket].losses++;
-  });
-
-  // Order buckets
-  const allBuckets = [...new Set(bets.map(b => b.bucket))];
-  const ordered = BUCKET_ORDER.filter(b => allBuckets.includes(b));
-  const extra = allBuckets.filter(b => !BUCKET_ORDER.includes(b)).sort();
-  const buckets = [...ordered, ...extra];
-
-  const summary = buckets.map(name => {
-    const s = bucketMap[name] || { wins: 0, losses: 0 };
-    const total = s.wins + s.losses;
-    const winPct = total > 0 ? (s.wins / total) * 100 : 0;
-    const roi = total > 0 ? ((s.wins * WIN_PAYOUT - s.losses * LOSS_COST) / (total * LOSS_COST)) * 100 : 0;
-    const profit = s.wins * WIN_PAYOUT - s.losses * LOSS_COST;
-    return { name, wins: s.wins, losses: s.losses, total, winPct, roi, profit };
-  });
-
-  // Totals
+  /* Compute dynamic totals */
   const totW = summary.reduce((a, s) => a + s.wins, 0);
   const totL = summary.reduce((a, s) => a + s.losses, 0);
-  const totN = totW + totL;
-  const totWp = totN > 0 ? (totW / totN) * 100 : 0;
-  const totRoi = totN > 0 ? ((totW * WIN_PAYOUT - totL * LOSS_COST) / (totN * LOSS_COST)) * 100 : 0;
-  const totProfit = totW * WIN_PAYOUT - totL * LOSS_COST;
+  const totN = summary.reduce((a, s) => a + s.total, 0);
+  const totWp = (totW + totL) > 0 ? (totW / (totW + totL)) * 100 : 0;
+  const totProfit = summary.reduce((a, s) => a + s.profit, 0);
+  const totRoi = (totW + totL) > 0 ? ((totW * 909.09 - totL * 1000) / ((totW + totL) * 1000)) * 100 : 0;
 
-  const best = summary.reduce((a, b) => (b.total >= 2 && b.roi > a.roi ? b : a), { roi: -Infinity, name: "—" });
-  const worst = summary.reduce((a, b) => (b.total >= 2 && b.roi < a.roi ? b : a), { roi: Infinity, name: "—" });
+  const best  = summary.reduce((a, b) => (b.total >= 2 && b.roi > a.roi ? b : a), { roi: -Infinity, name: "—" });
+  const worst = summary.reduce((a, b) => (b.total >= 2 && b.roi < a.roi ? b : a), { roi:  Infinity, name: "—" });
 
-  // Cumulative profit by date
-  const cumByDate = [];
-  let running = 0;
-  const dateMap = new Map();
-  bets.forEach(b => {
-    running += b.cover === 1 ? WIN_PAYOUT : -LOSS_COST;
-    const key = b.date.toISOString().slice(0, 10);
-    dateMap.set(key, running);
-  });
-  dateMap.forEach((v, k) => cumByDate.push({ date: k, profit: v }));
-
-  // Date range
-  const minDate = bets.length > 0 ? bets[0].date : null;
-  const maxDate = bets.length > 0 ? bets[bets.length - 1].date : null;
-
-  return { summary, buckets, totW, totL, totN, totWp, totRoi, totProfit, best, worst, cumByDate, minDate, maxDate };
+  return { summary, totW, totL, totN, totWp, totRoi, totProfit, best, worst };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -510,10 +429,10 @@ function renderKPIs(stats) {
     { label: "ROI", value: (stats.totRoi >= 0 ? "+" : "") + stats.totRoi.toFixed(1) + "%", cls: stats.totRoi >= 0 ? "t-pos" : "t-neg", vcls: stats.totRoi >= 0 ? "c-g" : "c-r" },
     { label: "Total Profit", value: "$" + Math.round(stats.totProfit).toLocaleString(), cls: stats.totProfit >= 0 ? "t-pos" : "t-neg", vcls: stats.totProfit >= 0 ? "c-g" : "c-r",
       note: `${stats.totW}W – ${stats.totL}L` },
-    { label: "Best ROI Bucket", value: "+" + stats.best.roi.toFixed(1) + "%", cls: "t-pos", vcls: "c-g",
-      note: shortBucket(stats.best.name) },
+    { label: "Best ROI Bucket", value: (stats.best.roi >= 0 ? "+" : "") + stats.best.roi.toFixed(1) + "%", cls: "t-pos", vcls: "c-g",
+      note: shortName(stats.best.name) },
     { label: "Worst ROI Bucket", value: stats.worst.roi.toFixed(1) + "%", cls: "t-neg", vcls: "c-r",
-      note: shortBucket(stats.worst.name) }
+      note: shortName(stats.worst.name) }
   ];
 
   grid.innerHTML = cards.map((c, i) =>
@@ -525,9 +444,8 @@ function renderKPIs(stats) {
   ).join("");
 }
 
-function shortBucket(name) {
-  // Compact name for KPI card display
-  return name.replace("(all spreads)", "(all)").replace("positive spread + negative ML", "+spread/−ML");
+function shortName(name) {
+  return name.replace("(all spreads)", "(all)").replace("positive spread + negative ML", "+spd/−ML");
 }
 
 function renderTable(stats) {
@@ -545,7 +463,7 @@ function renderTable(stats) {
     </tr>`;
   }).join("");
 
-  // Total row
+  /* Dynamic TOTAL row */
   const twcls = stats.totWp >= BREAK_EVEN ? "vp" : "vn";
   const trcls = stats.totRoi >= 0 ? "vp" : "vn";
   const tpcls = stats.totProfit >= 0 ? "vp" : "vn";
@@ -570,27 +488,20 @@ const C = {
   gridLight: "rgba(40,43,62,0.5)"
 };
 
-function barColors(values, posColor, negColor) {
-  return values.map(v => v >= 0 ? posColor : negColor);
-}
+function barColors(vals, posC, negC) { return vals.map(v => v >= 0 ? posC : negC); }
 
 function shortLabel(name) {
   return name
-    .replace("Fav -100 to -149 × 0-2 spread", "F −100/−149")
-    .replace("Fav -150 to -199 × 0-4 spread", "F −150/−199")
-    .replace("Fav -200 to -299 (all spreads)", "F −200/−299")
-    .replace("Fav -300 to -499 (all spreads)", "F −300/−499")
-    .replace("Fav -500+ (all spreads)", "F −500+")
-    .replace("Dog +100-199 × 2.5-4 spreads", "D +100/2.5–4")
-    .replace("Dog +100-199 × 4.5-6 spreads", "D +100/4.5–6")
-    .replace("Dog +300-399 (all spreads)", "D +300/+399")
-    .replace("Dog +400-499 (all spreads)", "D +400/+499")
-    .replace("Dog +500-999 (all spreads)", "D +500/+999")
-    .replace("Dog +1000+ (all spreads)", "D +1000+")
-    .replace("Gap games (positive spread + negative ML)", "Gap")
+    .replace(/Fav -(\d+) to -(\d+) × ([\d.-]+) spread/,  "F −$1/−$2")
+    .replace(/Fav -(\d+)\+ \(all spreads\)/,               "F −$1+")
+    .replace(/Fav -(\d+) to -(\d+) \(all spreads\)/,       "F −$1/−$2")
+    .replace(/Dog \+(\d+)-(\d+) × ([\d.-]+) spreads?/,     "D +$1/$3")
+    .replace(/Dog \+(\d+)-(\d+) × ([\d.-]+)-([\d.]+)/,     "D +$1/$3–$4")
+    .replace(/Dog \+(\d+)-(\d+) \(all spreads\)/,           "D +$1/+$2")
+    .replace(/Dog \+(\d+)\+ \(all spreads\)/,               "D +$1+")
+    .replace(/Gap games.*/, "Gap")
     .replace("Fav Other", "F Other")
-    .replace("Dog Other", "D Other")
-    .replace(name, name.substring(0, 14));  // fallback
+    .replace("Dog Other", "D Other");
 }
 
 function makeScales(yLabel, pct) {
@@ -614,142 +525,112 @@ function renderCharts(stats) {
   const wpVals = stats.summary.map(s => +s.winPct.toFixed(2));
   const profitVals = stats.summary.map(s => Math.round(s.profit));
 
-  // ── ROI BAR ──
+  /* Cumulative profit across buckets (sorted by name order) */
+  let running = 0;
+  const cumVals = stats.summary.map(s => { running += s.profit; return Math.round(running); });
+
+  /* ── ROI BAR ── */
   new Chart(document.getElementById("cRoiBar"), {
     type: "bar",
-    data: {
-      labels,
-      datasets: [{
-        data: roiVals,
-        backgroundColor: barColors(roiVals, C.posBg, C.negBg),
-        borderColor: barColors(roiVals, C.pos, C.neg),
-        borderWidth: 1, borderRadius: 3, maxBarThickness: 38
-      }]
-    },
+    data: { labels, datasets: [{
+      data: roiVals,
+      backgroundColor: barColors(roiVals, C.posBg, C.negBg),
+      borderColor: barColors(roiVals, C.pos, C.neg),
+      borderWidth: 1, borderRadius: 3, maxBarThickness: 38
+    }]},
     options: {
       scales: makeScales("ROI %", true),
       plugins: {
-        tooltip: {
-          callbacks: {
-            title: (items) => stats.summary[items[0].dataIndex].name,
-            label: (item) => "ROI: " + (item.raw >= 0 ? "+" : "") + item.raw.toFixed(1) + "%"
-          }
-        },
-        annotation: {
-          annotations: {
-            zero: { type: "line", yMin: 0, yMax: 0, borderColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderDash: [4, 4] }
-          }
-        }
+        tooltip: { callbacks: {
+          title: (items) => stats.summary[items[0].dataIndex].name,
+          label: (item) => "ROI: " + (item.raw >= 0 ? "+" : "") + item.raw.toFixed(1) + "%"
+        }},
+        annotation: { annotations: {
+          zero: { type: "line", yMin: 0, yMax: 0, borderColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderDash: [4, 4] }
+        }}
       }
     }
   });
 
-  // ── WIN % BAR ──
+  /* ── WIN % BAR ── */
   new Chart(document.getElementById("cWpBar"), {
     type: "bar",
-    data: {
-      labels,
-      datasets: [{
-        data: wpVals,
-        backgroundColor: wpVals.map(v => v >= BREAK_EVEN ? C.blueBg : C.negBg),
-        borderColor: wpVals.map(v => v >= BREAK_EVEN ? C.blue : C.neg),
-        borderWidth: 1, borderRadius: 3, maxBarThickness: 38
-      }]
-    },
+    data: { labels, datasets: [{
+      data: wpVals,
+      backgroundColor: wpVals.map(v => v >= BREAK_EVEN ? C.blueBg : C.negBg),
+      borderColor: wpVals.map(v => v >= BREAK_EVEN ? C.blue : C.neg),
+      borderWidth: 1, borderRadius: 3, maxBarThickness: 38
+    }]},
     options: {
       scales: makeScales("Win %", true),
       plugins: {
-        tooltip: {
-          callbacks: {
-            title: (items) => stats.summary[items[0].dataIndex].name,
-            label: (item) => "Win %: " + item.raw.toFixed(1) + "%"
-          }
-        },
-        annotation: {
-          annotations: {
-            breakeven: {
-              type: "line", yMin: BREAK_EVEN, yMax: BREAK_EVEN,
-              borderColor: "rgba(245,197,66,0.5)", borderWidth: 1.5, borderDash: [6, 3],
-              label: {
-                display: true, content: "Break-even 52.38%", position: "start",
-                backgroundColor: "rgba(245,197,66,0.12)", color: "#f5c542",
-                font: { size: 9, family: "'IBM Plex Mono'" }, padding: 3
-              }
+        tooltip: { callbacks: {
+          title: (items) => stats.summary[items[0].dataIndex].name,
+          label: (item) => "Win %: " + item.raw.toFixed(1) + "%"
+        }},
+        annotation: { annotations: {
+          breakeven: {
+            type: "line", yMin: BREAK_EVEN, yMax: BREAK_EVEN,
+            borderColor: "rgba(245,197,66,0.5)", borderWidth: 1.5, borderDash: [6, 3],
+            label: { display: true, content: "Break-even 52.38%", position: "start",
+              backgroundColor: "rgba(245,197,66,0.12)", color: "#f5c542",
+              font: { size: 9, family: "'IBM Plex Mono'" }, padding: 3
             }
           }
-        }
+        }}
       }
     }
   });
 
-  // ── PROFIT BAR ──
+  /* ── PROFIT BAR ── */
   new Chart(document.getElementById("cProfitBar"), {
     type: "bar",
-    data: {
-      labels,
-      datasets: [{
-        data: profitVals,
-        backgroundColor: barColors(profitVals, C.orangeBg, C.negBg),
-        borderColor: barColors(profitVals, C.orange, C.neg),
-        borderWidth: 1, borderRadius: 3, maxBarThickness: 38
-      }]
-    },
+    data: { labels, datasets: [{
+      data: profitVals,
+      backgroundColor: barColors(profitVals, C.orangeBg, C.negBg),
+      borderColor: barColors(profitVals, C.orange, C.neg),
+      borderWidth: 1, borderRadius: 3, maxBarThickness: 38
+    }]},
     options: {
       scales: makeScales("Profit ($)", false),
       plugins: {
-        tooltip: {
-          callbacks: {
-            title: (items) => stats.summary[items[0].dataIndex].name,
-            label: (item) => "Profit: $" + item.raw.toLocaleString()
-          }
-        },
-        annotation: {
-          annotations: {
-            zero: { type: "line", yMin: 0, yMax: 0, borderColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderDash: [4, 4] }
-          }
-        }
+        tooltip: { callbacks: {
+          title: (items) => stats.summary[items[0].dataIndex].name,
+          label: (item) => "Profit: $" + item.raw.toLocaleString()
+        }},
+        annotation: { annotations: {
+          zero: { type: "line", yMin: 0, yMax: 0, borderColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderDash: [4, 4] }
+        }}
       }
     }
   });
 
-  // ── CUMULATIVE PROFIT LINE ──
+  /* ── CUMULATIVE PROFIT LINE ── */
   new Chart(document.getElementById("cCumLine"), {
     type: "line",
-    data: {
-      labels: stats.cumByDate.map(d => d.date),
-      datasets: [{
-        data: stats.cumByDate.map(d => Math.round(d.profit)),
-        borderColor: C.purple,
-        backgroundColor: C.purpleBg.replace("0.65", "0.08"),
-        fill: true,
-        tension: 0.3,
-        pointRadius: 2.5,
-        pointBackgroundColor: C.purple,
-        pointBorderColor: "transparent",
-        borderWidth: 2
-      }]
-    },
+    data: { labels, datasets: [{
+      data: cumVals,
+      borderColor: C.purple,
+      backgroundColor: C.purpleBg.replace("0.65", "0.08"),
+      fill: true, tension: 0.3, pointRadius: 3,
+      pointBackgroundColor: C.purple, pointBorderColor: "transparent", borderWidth: 2
+    }]},
     options: {
       scales: {
-        x: {
-          grid: { color: C.grid, drawBorder: false },
-          ticks: { maxRotation: 40, font: { size: 9 }, maxTicksLimit: 15 }
-        },
-        y: {
-          grid: { color: C.gridLight, drawBorder: false },
+        x: { grid: { color: C.grid, drawBorder: false }, ticks: { maxRotation: 55, minRotation: 35, font: { size: 9 } } },
+        y: { grid: { color: C.gridLight, drawBorder: false },
           ticks: { callback: v => "$" + v.toLocaleString(), font: { size: 9 } },
           title: { display: true, text: "Cumulative Profit ($)", color: "#6a6e84", font: { size: 10 } }
         }
       },
       plugins: {
-        tooltip: {
-          callbacks: { label: (item) => "Profit: $" + item.raw.toLocaleString() }
-        },
-        annotation: {
-          annotations: {
-            zero: { type: "line", yMin: 0, yMax: 0, borderColor: "rgba(255,255,255,0.1)", borderWidth: 1, borderDash: [4, 4] }
-          }
-        }
+        tooltip: { callbacks: {
+          title: (items) => stats.summary[items[0].dataIndex].name,
+          label: (item) => "Cumulative: $" + item.raw.toLocaleString()
+        }},
+        annotation: { annotations: {
+          zero: { type: "line", yMin: 0, yMax: 0, borderColor: "rgba(255,255,255,0.1)", borderWidth: 1, borderDash: [4, 4] }
+        }}
       }
     }
   });
@@ -759,13 +640,10 @@ function renderCharts(stats) {
    META
    ═══════════════════════════════════════════════════════════════════════════ */
 function renderMeta(stats) {
-  const now = new Date();
-  document.getElementById("tsRefresh").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  if (stats.minDate && stats.maxDate) {
-    const fmt = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-    document.getElementById("metaWindow").innerHTML =
-      `Window: <b>${fmt(stats.minDate)}</b> – <b>${fmt(stats.maxDate)}</b> · ${stats.totN} bets`;
-  }
+  document.getElementById("tsRefresh").textContent =
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  document.getElementById("metaWindow").innerHTML =
+    `${stats.summary.length} buckets · <b>${stats.totN}</b> total bets · $1k flat @ −110`;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -778,46 +656,13 @@ async function boot() {
 
   try {
     ldMsg.textContent = "Fetching live data from Google Sheets…";
+    const csvText = await fetchCSV(SHEET_URL);
 
-    /* Try multiple fetch strategies — direct first, then CORS proxies as fallbacks */
-    const strategies = [
-      { name: "Direct", url: SHEET_URL },
-      { name: "corsproxy.io", url: "https://corsproxy.io/?" + encodeURIComponent(SHEET_URL) },
-      { name: "allorigins", url: "https://api.allorigins.win/raw?url=" + encodeURIComponent(SHEET_URL) },
-      { name: "corsproxy.org", url: "https://corsproxy.org/?" + encodeURIComponent(SHEET_URL) },
-    ];
-
-    let resp = null;
-    let lastErr = null;
-    let usedStrategy = "";
-
-    for (const strat of strategies) {
-      try {
-        ldMsg.textContent = `Trying ${strat.name}…`;
-        const r = await fetch(strat.url, { signal: AbortSignal.timeout(10000) });
-        if (r.ok) { resp = r; usedStrategy = strat.name; break; }
-      } catch (e) { lastErr = e; }
-    }
-
-    if (!resp) throw new Error(
-      "All fetch methods failed. Last error: " + (lastErr?.message || "Unknown") +
-      "\\n\\nTroubleshooting:\\n• Verify the Google Sheet is published (File → Share → Publish to web → CSV)\\n• Try opening the CSV URL directly in your browser:\\n" + SHEET_URL
-    );
-
-    ldMsg.textContent = "Parsing CSV…";
-    const text = await resp.text();
-    const rows = parseCSV(text);
-
-    if (rows.length < 2) throw new Error("CSV appears empty — check your published link.");
-
-    ldMsg.textContent = "Computing analytics…";
-    const bets = processData(rows);
-    if (bets.length === 0) throw new Error("No valid bet rows found. Check columns: Date, Bucket Name, Cover Flag.");
-
-    const stats = computeStats(bets);
+    ldMsg.textContent = "Parsing with PapaParse…";
+    const stats = processCSV(csvText);
 
     ldMsg.textContent = "Rendering dashboard…";
-    await new Promise(r => setTimeout(r, 100)); // let the UI breathe
+    await new Promise(r => setTimeout(r, 80));
 
     document.getElementById("main").style.display = "block";
     renderKPIs(stats);
