@@ -42,6 +42,7 @@
   --blue:#5b9cf5;
   --blue-dim:rgba(91,156,245,.1);
   --purple:#9b7ff0;
+  --cyan:#22d3ee;
   --orange:#f09c5b;
   --r:10px
 }
@@ -157,6 +158,12 @@ header{
 .d-b{background:var(--blue);box-shadow:0 0 5px rgba(91,156,245,.25)}
 .d-o{background:var(--orange);box-shadow:0 0 5px rgba(240,156,91,.25)}
 .d-p{background:var(--purple);box-shadow:0 0 5px rgba(155,127,240,.25)}
+.d-eq{background:var(--cyan,#22d3ee);box-shadow:0 0 5px rgba(34,211,238,.25)}
+.chart-box-wide{height:400px}
+.eq-meta{
+  font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--ink-mute);
+  margin-top:.5rem;text-align:right;padding-right:.3rem;
+}
 
 /* ── TABLE ──────────────────────────────────────────────────────────── */
 .tbl-box{background:var(--s1);border:1px solid var(--edge);border-radius:var(--r);padding:1.05rem 1.2rem;overflow-x:auto}
@@ -180,12 +187,14 @@ tr.tot td{border-top:2px solid var(--edge-hi);font-weight:600;color:var(--ink)!i
   .grid2{grid-template-columns:1fr 1fr}
   .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
   .chart-box{height:300px}
+  .chart-box-wide{height:360px}
   .wrap{padding:1.1rem 1.4rem 2.5rem}
 }
 @media(max-width:768px){
   .grid2{grid-template-columns:1fr}
   .kpi-grid{grid-template-columns:repeat(3,1fr)}
   .chart-box{height:280px}
+  .chart-box-wide{height:320px}
   .wrap{padding:1rem}
   header{padding:1.1rem 1rem .85rem;flex-direction:column;align-items:flex-start}
   .hd-meta{text-align:left}
@@ -198,6 +207,7 @@ tr.tot td{border-top:2px solid var(--edge-hi);font-weight:600;color:var(--ink)!i
 @media(max-width:480px){
   .kpi-grid{grid-template-columns:1fr 1fr}
   .chart-box{height:220px}
+  .chart-box-wide{height:260px}
   html{font-size:13px}
   .kpi{padding:.85rem .9rem}
   .kpi-val{font-size:1.1rem}
@@ -277,6 +287,14 @@ tr.tot td{border-top:2px solid var(--edge-hi);font-weight:600;color:var(--ink)!i
       <th>Bucket</th><th>W</th><th>L</th><th>Total</th><th>Win %</th><th>ROI</th><th>Profit</th>
     </tr></thead><tbody id="tblBody"></tbody></table>
   </section>
+
+  <section class="grid1 anim" style="animation-delay:.36s">
+    <div class="pnl">
+      <div class="pnl-hd"><div class="pnl-t"><span class="dot d-eq"></span>Actual Bets — Equity Curve</div></div>
+      <div class="chart-box chart-box-wide"><canvas id="cEquity"></canvas></div>
+      <div id="eqMeta" class="eq-meta"></div>
+    </div>
+  </section>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
@@ -285,6 +303,8 @@ tr.tot td{border-top:2px solid var(--edge-hi);font-weight:600;color:var(--ink)!i
    DATA SOURCE — Summary tab from Google Sheets
    ═══════════════════════════════════════════════════════════════════════════ */
 const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0Hwi4t6xp8RkR6Mih7sHpkk0dbvJ9bIuAl46givUktGiCQy6UXCb73BrgdC_UjeIndiNSi9WZUv4O/pub?gid=2059810443&single=true&output=csv";
+
+const EQUITY_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSCjV2rud8IgNjheKVfRc-3RtSCA_IOWUfWP5gUBl5H2hPzf2rufKcAdLHexYtcJqtlx8Z37Vxe918z/pub?gid=1849141740&single=true&output=csv";
 
 const BREAK_EVEN = 52.38;
 
@@ -647,6 +667,140 @@ function renderMeta(stats) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   EQUITY CURVE — Parse bet-level CSV and render cumulative profit line
+   ═══════════════════════════════════════════════════════════════════════════ */
+function parseEquityCSV(csvText) {
+  const parsed = Papa.parse(csvText, { header: false, skipEmptyLines: true, dynamicTyping: false });
+  const rows = parsed.data;
+  if (!rows || rows.length < 2) throw new Error("Equity CSV appears empty.");
+
+  /* Find header row — look for "Date" in first 20 rows */
+  let hIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    const lower = rows[i].map(c => (c || "").trim().toLowerCase());
+    if (lower.includes("date")) { hIdx = i; break; }
+  }
+  if (hIdx < 0) throw new Error("Equity CSV: could not find header row with 'Date' column.");
+
+  const hdr = rows[hIdx].map(c => (c || "").trim().toLowerCase());
+  const iDate = hdr.indexOf("date");
+
+  /* Column K = index 10 (0-based). Also try fuzzy match for "cumulative" or "cum" or "profit" */
+  let iCum = 10; // Column K
+  const cumIdx = hdr.findIndex(h => h.includes("cumulative") || h.includes("cum profit") || h.includes("running"));
+  if (cumIdx >= 0) iCum = cumIdx;
+
+  /* Parse data rows */
+  const points = [];
+  for (let r = hIdx + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row || row.length <= iCum) continue;
+
+    const dateStr = (row[iDate] || "").trim();
+    if (!dateStr) continue;
+
+    /* Parse date */
+    let d;
+    if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+      d = new Date(dateStr.split(" ")[0] + "T00:00:00");
+    } else if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(dateStr)) {
+      const parts = dateStr.split("/");
+      const y = parts[2].length === 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
+      d = new Date(y, parseInt(parts[0]) - 1, parseInt(parts[1]));
+    } else {
+      d = new Date(dateStr);
+    }
+    if (isNaN(d.getTime())) continue;
+
+    /* Parse cumulative profit — strip $, commas, parens */
+    let valStr = (row[iCum] || "").trim().replace(/[$,]/g, "").replace(/^\((.+)\)$/, "-$1");
+    const val = parseFloat(valStr);
+    if (isNaN(val)) continue;
+
+    points.push({ date: d, label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), profit: val });
+  }
+
+  /* Sort by date and deduplicate — keep last value per date */
+  points.sort((a, b) => a.date - b.date);
+  const deduped = [];
+  for (let i = 0; i < points.length; i++) {
+    if (i === points.length - 1 || points[i].date.getTime() !== points[i + 1].date.getTime()) {
+      deduped.push(points[i]);
+    }
+  }
+
+  return deduped;
+}
+
+function renderEquityCurve(points) {
+  if (points.length === 0) return;
+
+  const labels = points.map(p => p.label);
+  const data = points.map(p => Math.round(p.profit));
+  const peak = Math.max(...data);
+  const current = data[data.length - 1];
+
+  /* Gradient fill — green when positive, blends to red when negative */
+  const ctx = document.getElementById("cEquity").getContext("2d");
+  const grad = ctx.createLinearGradient(0, 0, 0, 400);
+  grad.addColorStop(0, "rgba(34,211,238,0.15)");
+  grad.addColorStop(0.5, "rgba(34,211,238,0.04)");
+  grad.addColorStop(1, "rgba(34,211,238,0)");
+
+  new Chart(ctx, {
+    type: "line",
+    data: { labels, datasets: [{
+      data,
+      borderColor: "#22d3ee",
+      backgroundColor: grad,
+      fill: true,
+      tension: 0.35,
+      pointRadius: 0,
+      pointHitRadius: 8,
+      pointHoverRadius: 4,
+      pointHoverBackgroundColor: "#22d3ee",
+      pointHoverBorderColor: "#0a0b12",
+      pointHoverBorderWidth: 2,
+      borderWidth: 2.2
+    }]},
+    options: {
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          grid: { color: C.grid, drawBorder: false },
+          ticks: { maxRotation: 40, font: { size: 9 }, maxTicksLimit: 20, autoSkip: true }
+        },
+        y: {
+          grid: { color: C.gridLight, drawBorder: false },
+          ticks: { callback: v => "$" + v.toLocaleString(), font: { size: 9 } },
+          title: { display: true, text: "Cumulative Profit ($)", color: "#6a6e84", font: { size: 10 } }
+        }
+      },
+      plugins: {
+        tooltip: {
+          backgroundColor: "rgba(15,16,25,0.95)",
+          borderColor: "rgba(34,211,238,0.3)",
+          borderWidth: 1,
+          titleFont: { family: "'IBM Plex Mono'" },
+          bodyFont: { family: "'IBM Plex Mono'" },
+          callbacks: { label: (item) => "P&L: $" + item.raw.toLocaleString() }
+        },
+        annotation: { annotations: {
+          zero: { type: "line", yMin: 0, yMax: 0, borderColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderDash: [4, 4] }
+        }}
+      }
+    }
+  });
+
+  /* Meta line under chart */
+  const fmt = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  document.getElementById("eqMeta").innerHTML =
+    `${points.length} data points · ${fmt(points[0].date)} – ${fmt(points[points.length - 1].date)} · ` +
+    `Peak: <span style="color:var(--pos)">$${peak.toLocaleString()}</span> · ` +
+    `Current: <span style="color:${current >= 0 ? 'var(--pos)' : 'var(--neg)'}">$${current.toLocaleString()}</span>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    BOOT
    ═══════════════════════════════════════════════════════════════════════════ */
 async function boot() {
@@ -656,10 +810,21 @@ async function boot() {
 
   try {
     ldMsg.textContent = "Fetching live data from Google Sheets…";
-    const csvText = await fetchCSV(SHEET_URL);
+
+    /* Fetch both CSVs in parallel */
+    const [summaryText, equityText] = await Promise.all([
+      fetchCSV(SHEET_URL),
+      fetchCSV(EQUITY_CSV_URL).catch(e => { console.warn("Equity CSV fetch failed:", e); return null; })
+    ]);
 
     ldMsg.textContent = "Parsing with PapaParse…";
-    const stats = processCSV(csvText);
+    const stats = processCSV(summaryText);
+
+    let equityPoints = [];
+    if (equityText) {
+      try { equityPoints = parseEquityCSV(equityText); }
+      catch (e) { console.warn("Equity CSV parse error:", e); }
+    }
 
     ldMsg.textContent = "Rendering dashboard…";
     await new Promise(r => setTimeout(r, 80));
@@ -669,6 +834,13 @@ async function boot() {
     renderTable(stats);
     renderCharts(stats);
     renderMeta(stats);
+
+    if (equityPoints.length > 0) {
+      renderEquityCurve(equityPoints);
+    } else {
+      document.getElementById("eqMeta").innerHTML =
+        '<span style="color:var(--warn)">Equity data unavailable — check published CSV link</span>';
+    }
 
     loader.classList.add("done");
   } catch (err) {
