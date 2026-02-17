@@ -159,6 +159,11 @@ header{
 .d-o{background:var(--orange);box-shadow:0 0 5px rgba(240,156,91,.25)}
 .d-p{background:var(--purple);box-shadow:0 0 5px rgba(155,127,240,.25)}
 .d-eq{background:var(--cyan,#22d3ee);box-shadow:0 0 5px rgba(34,211,238,.25)}
+.d-ml{background:#a78bfa;box-shadow:0 0 5px rgba(167,139,250,.25)}
+.ml-legend{display:flex;flex-wrap:wrap;gap:.35rem .7rem;font-family:'IBM Plex Mono',monospace;font-size:.58rem}
+.ml-legend-item{display:flex;align-items:center;gap:4px;color:var(--ink2);cursor:pointer;transition:opacity .2s}
+.ml-legend-item:hover{opacity:.7}
+.ml-legend-swatch{width:10px;height:3px;border-radius:1px;flex-shrink:0}
 .chart-box-wide{height:400px}
 .eq-meta{
   font-family:'IBM Plex Mono',monospace;font-size:.62rem;color:var(--ink-mute);
@@ -265,6 +270,17 @@ tr.tot td{border-top:2px solid var(--edge-hi);font-weight:600;color:var(--ink)!i
     </div>
   </section>
 
+  <section class="grid1 anim" style="animation-delay:.12s">
+    <div class="pnl" id="mlPanel">
+      <div class="pnl-hd">
+        <div class="pnl-t"><span class="dot d-ml"></span>Cumulative PnL by Bucket</div>
+        <div id="mlLegend" class="ml-legend"></div>
+      </div>
+      <div class="chart-box chart-box-wide"><canvas id="cMultiLine"></canvas></div>
+      <div id="mlMeta" class="eq-meta"></div>
+    </div>
+  </section>
+
   <section class="grid2 anim" style="animation-delay:.16s">
     <div class="pnl">
       <div class="pnl-hd"><div class="pnl-t"><span class="dot d-g"></span>ROI by Bucket</div></div>
@@ -305,6 +321,8 @@ tr.tot td{border-top:2px solid var(--edge-hi);font-weight:600;color:var(--ink)!i
 const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0Hwi4t6xp8RkR6Mih7sHpkk0dbvJ9bIuAl46givUktGiCQy6UXCb73BrgdC_UjeIndiNSi9WZUv4O/pub?gid=2059810443&single=true&output=csv";
 
 const EQUITY_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSCjV2rud8IgNjheKVfRc-3RtSCA_IOWUfWP5gUBl5H2hPzf2rufKcAdLHexYtcJqtlx8Z37Vxe918z/pub?gid=1849141740&single=true&output=csv";
+
+const MULTILINE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSi04EMFZfH-dMRSXrnGz63K7E4QKseAgUInPlHacrUwXFBeyNw8DHJ4C-Wq9ewaXCsib5fg8VmjBhm/pub?gid=1948664093&single=true&output=csv";
 
 const BREAK_EVEN = 52.38;
 
@@ -674,57 +692,50 @@ function parseEquityCSV(csvText) {
   const rows = parsed.data;
   if (!rows || rows.length < 2) throw new Error("Equity CSV appears empty (" + (rows ? rows.length : 0) + " rows).");
 
-  /* Find header row — look for "Date" in first 25 rows */
+  /* Find header row — look for "date" in first 30 rows */
   let hIdx = -1;
-  for (let i = 0; i < Math.min(rows.length, 25); i++) {
+  for (let i = 0; i < Math.min(rows.length, 30); i++) {
     const lower = rows[i].map(c => (c || "").trim().toLowerCase());
     if (lower.some(h => h === "date" || h === "dates")) { hIdx = i; break; }
   }
-  if (hIdx < 0) throw new Error("Equity CSV: no header row with 'Date'. First row: [" + (rows[0] || []).join(", ") + "]");
+  if (hIdx < 0) throw new Error("Equity CSV: no header row with 'Date'. Row 0: [" + (rows[0] || []).slice(0, 8).join(", ") + "]");
 
   const hdr = rows[hIdx].map(c => (c || "").trim().toLowerCase());
   const iDate = hdr.findIndex(h => h === "date" || h === "dates");
 
-  /* Find cumulative profit column — try multiple strategies */
+  /* ── Find cumulative profit column ─────────────────────────────────
+     Known layout from sheet: date, league, matchup, ml odds, tier,
+     bucket, #, dk_spread, odds, wager, result, pnl, profit, notes,
+     Cumulative PNL — so it's the LAST column, header contains "cumulative"
+     ──────────────────────────────────────────────────────────────────── */
   let iCum = -1;
 
-  /* Strategy 1: fuzzy match header name */
-  const cumKeywords = ["cumulative", "cum profit", "cum p&l", "running", "equity", "running profit", "total profit", "net profit"];
-  for (const kw of cumKeywords) {
-    const idx = hdr.findIndex(h => h.includes(kw));
-    if (idx >= 0) { iCum = idx; break; }
-  }
+  /* Strategy 1: header contains "cumulative" or "cum" */
+  iCum = hdr.findIndex(h => h.includes("cumulative") || h.includes("cum "));
+  
+  /* Strategy 2: header contains "running" or "equity" */
+  if (iCum < 0) iCum = hdr.findIndex(h => h.includes("running") || h.includes("equity"));
 
-  /* Strategy 2: Column K (index 10) if it exists and has numeric data */
-  if (iCum < 0 && rows.length > hIdx + 1) {
-    const testRow = rows[hIdx + 1];
-    if (testRow && testRow.length > 10) {
-      const testVal = (testRow[10] || "").trim().replace(/[$,]/g, "");
-      if (testVal && !isNaN(parseFloat(testVal))) iCum = 10;
-    }
-  }
-
-  /* Strategy 3: scan rightward from column D for first column with numeric $ data */
+  /* Strategy 3: last column that has a numeric-looking value in first data row */
   if (iCum < 0 && rows.length > hIdx + 1) {
     const testRow = rows[hIdx + 1];
     if (testRow) {
-      for (let c = 3; c < testRow.length; c++) {
-        if (c === iDate) continue;
-        const v = (testRow[c] || "").trim().replace(/[$,]/g, "").replace(/^\((.+)\)$/, "-$1");
-        if (v && !isNaN(parseFloat(v)) && Math.abs(parseFloat(v)) > 1) { iCum = c; break; }
+      for (let c = testRow.length - 1; c >= 0; c--) {
+        const v = (testRow[c] || "").trim().replace(/[$,]/g, "");
+        if (v && !isNaN(parseFloat(v)) && Math.abs(parseFloat(v)) > 10) { iCum = c; break; }
       }
     }
   }
 
-  /* Strategy 4: just use the last column */
+  /* Strategy 4: just use last non-empty column */
   if (iCum < 0 && rows.length > hIdx + 1) {
     const testRow = rows[hIdx + 1];
-    if (testRow && testRow.length > 1) iCum = testRow.length - 1;
+    if (testRow) iCum = testRow.length - 1;
   }
 
-  if (iCum < 0) throw new Error("Equity CSV: could not identify cumulative profit column. Headers: [" + hdr.join(", ") + "]");
+  if (iCum < 0) throw new Error("Equity CSV: could not find cumulative profit column. Headers: [" + hdr.join(", ") + "]");
 
-  console.log("Equity CSV: using Date col=" + iDate + ", Profit col=" + iCum + " ('" + hdr[iCum] + "'), header row=" + hIdx + ", data rows=" + (rows.length - hIdx - 1));
+  console.log("Equity CSV: Date col=" + iDate + ", Cumulative col=" + iCum + " ('" + hdr[iCum] + "'), header at row " + hIdx + ", " + (rows.length - hIdx - 1) + " data rows");
 
   /* Parse data rows */
   const points = [];
@@ -736,7 +747,7 @@ function parseEquityCSV(csvText) {
     const dateStr = (row[iDate] || "").trim();
     if (!dateStr) { skipped++; continue; }
 
-    /* Parse date — handle many formats */
+    /* Parse date — handle M/D/YY, M/D/YYYY, YYYY-MM-DD */
     let d;
     if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
       d = new Date(dateStr.split(" ")[0] + "T12:00:00");
@@ -749,22 +760,24 @@ function parseEquityCSV(csvText) {
     }
     if (!d || isNaN(d.getTime())) { skipped++; continue; }
 
-    /* Parse cumulative profit — strip $, commas, parens, % */
-    let valStr = (row[iCum] || "").trim().replace(/[$,%]/g, "").replace(/,/g, "").replace(/^\((.+)\)$/, "-$1");
-    const val = parseFloat(valStr);
+    /* Parse cumulative value — strip $, commas, parens */
+    let v = (row[iCum] || "").trim();
+    if (!v) { skipped++; continue; }
+    v = v.replace(/[$,]/g, "").replace(/^\((.+)\)$/, "-$1");
+    const val = parseFloat(v);
     if (isNaN(val)) { skipped++; continue; }
 
     points.push({ date: d, label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), profit: val });
   }
 
-  console.log("Equity CSV: parsed " + points.length + " points, skipped " + skipped + " rows");
+  console.log("Equity CSV: " + points.length + " valid points, " + skipped + " skipped");
 
   if (points.length === 0) {
-    throw new Error("Equity CSV: 0 valid data points after parsing. Col " + iCum + " ('" + hdr[iCum] + "'). " +
-      "Sample row: [" + (rows[hIdx + 1] || []).join(" | ") + "]");
+    const sample = rows[hIdx + 1] || [];
+    throw new Error("0 valid points. Col " + iCum + " ('" + hdr[iCum] + "') sample value: '" + (sample[iCum] || "EMPTY") + "'. First data row: [" + sample.slice(0, 6).join(" | ") + " ... " + sample.slice(-3).join(" | ") + "]");
   }
 
-  /* Sort by date — keep ALL points (don't dedupe, each row is a bet) */
+  /* Sort chronologically */
   points.sort((a, b) => a.date - b.date);
   return points;
 }
@@ -838,6 +851,168 @@ function renderEquityCurve(points) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   MULTI-LINE PNL — Parse bucket-level cumulative PnL and render overlay
+   ═══════════════════════════════════════════════════════════════════════════ */
+const ML_COLORS = [
+  "#2dd4a0","#5b9cf5","#f09c5b","#f4718a","#a78bfa",
+  "#22d3ee","#f5c542","#ec4899","#6ee7b7","#818cf8",
+  "#fb923c","#38bdf8","#c084fc","#f87171","#34d399",
+  "#fbbf24","#a3e635","#e879f9","#67e8f9","#fca5a5"
+];
+
+function parseMultiLineCSV(csvText) {
+  const parsed = Papa.parse(csvText, { header: false, skipEmptyLines: true, dynamicTyping: false });
+  const rows = parsed.data;
+  if (!rows || rows.length < 2) throw new Error("Multi-line CSV appears empty.");
+
+  /* Find header row — first row that has "date" in column 0 or 1 */
+  let hIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    const first = (rows[i][0] || "").trim().toLowerCase();
+    if (first === "date" || first === "dates" || first === "day") { hIdx = i; break; }
+  }
+  if (hIdx < 0) throw new Error("Multi-line CSV: no header row starting with 'Date'. Row 0: " + (rows[0] || []).slice(0, 5).join(", "));
+
+  const hdr = rows[hIdx].map(c => (c || "").trim());
+  const bucketNames = hdr.slice(1).filter(h => h.length > 0);
+
+  if (bucketNames.length === 0) throw new Error("Multi-line CSV: no bucket columns found after Date. Headers: " + hdr.join(", "));
+
+  /* Parse data rows */
+  const dates = [];
+  const series = {}; // bucketName → [values]
+  bucketNames.forEach(b => { series[b] = []; });
+
+  for (let r = hIdx + 1; r < rows.length; r++) {
+    const row = rows[r];
+    const dateStr = (row[0] || "").trim();
+    if (!dateStr) continue;
+
+    /* Parse date */
+    let d;
+    if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+      d = new Date(dateStr.split(" ")[0] + "T12:00:00");
+    } else if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(dateStr)) {
+      const p = dateStr.split("/");
+      const y = p[2] && p[2].length <= 2 ? 2000 + parseInt(p[2]) : parseInt(p[2]);
+      d = new Date(y, parseInt(p[0]) - 1, parseInt(p[1]));
+    } else {
+      d = new Date(dateStr);
+    }
+    if (!d || isNaN(d.getTime())) continue;
+
+    dates.push(d.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+
+    bucketNames.forEach((name, i) => {
+      const raw = (row[i + 1] || "").trim().replace(/[$,]/g, "").replace(/^\((.+)\)$/, "-$1");
+      const val = parseFloat(raw);
+      series[name].push(isNaN(val) ? null : val);
+    });
+  }
+
+  if (dates.length === 0) throw new Error("Multi-line CSV: 0 valid date rows parsed.");
+
+  console.log("Multi-line CSV: " + dates.length + " dates, " + bucketNames.length + " buckets: " + bucketNames.join(", "));
+  return { dates, bucketNames, series };
+}
+
+function renderMultiLineChart(data) {
+  const { dates, bucketNames, series } = data;
+
+  /* Build datasets */
+  const datasets = bucketNames.map((name, i) => {
+    const color = ML_COLORS[i % ML_COLORS.length];
+    return {
+      label: name,
+      data: series[name],
+      borderColor: color,
+      backgroundColor: "transparent",
+      borderWidth: 2,
+      tension: 0.35,
+      pointRadius: 0,
+      pointHitRadius: 8,
+      pointHoverRadius: 4,
+      pointHoverBackgroundColor: color,
+      pointHoverBorderColor: "#0a0b12",
+      pointHoverBorderWidth: 2,
+      spanGaps: true
+    };
+  });
+
+  /* Custom legend */
+  const legendEl = document.getElementById("mlLegend");
+  legendEl.innerHTML = bucketNames.map((name, i) => {
+    const color = ML_COLORS[i % ML_COLORS.length];
+    return `<span class="ml-legend-item" data-idx="${i}">
+      <span class="ml-legend-swatch" style="background:${color}"></span>${name}
+    </span>`;
+  }).join("");
+
+  const chart = new Chart(document.getElementById("cMultiLine"), {
+    type: "line",
+    data: { labels: dates, datasets },
+    options: {
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: {
+          grid: { color: C.grid, drawBorder: false },
+          ticks: { maxRotation: 40, font: { size: 9 }, maxTicksLimit: 20, autoSkip: true }
+        },
+        y: {
+          grid: { color: C.gridLight, drawBorder: false },
+          ticks: { callback: v => "$" + v.toLocaleString(), font: { size: 9 } },
+          title: { display: true, text: "Cumulative PnL ($)", color: "#6a6e84", font: { size: 10 } }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "rgba(15,16,25,0.95)",
+          borderColor: "rgba(167,139,250,0.3)",
+          borderWidth: 1,
+          titleFont: { family: "'IBM Plex Mono'", size: 11 },
+          bodyFont: { family: "'IBM Plex Mono'", size: 10 },
+          callbacks: {
+            label: (item) => {
+              const v = item.raw;
+              if (v === null || v === undefined) return null;
+              return " " + item.dataset.label + ": $" + v.toLocaleString();
+            }
+          }
+        },
+        annotation: { annotations: {
+          zero: { type: "line", yMin: 0, yMax: 0, borderColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderDash: [4, 4] }
+        }}
+      }
+    }
+  });
+
+  /* Click legend items to toggle visibility */
+  legendEl.addEventListener("click", (e) => {
+    const item = e.target.closest(".ml-legend-item");
+    if (!item) return;
+    const idx = parseInt(item.dataset.idx);
+    const meta = chart.getDatasetMeta(idx);
+    meta.hidden = !meta.hidden;
+    item.style.opacity = meta.hidden ? "0.3" : "1";
+    chart.update();
+  });
+
+  /* Meta */
+  const lastVals = bucketNames.map(name => {
+    const arr = series[name].filter(v => v !== null);
+    return arr.length > 0 ? arr[arr.length - 1] : 0;
+  });
+  const best = bucketNames[lastVals.indexOf(Math.max(...lastVals))];
+  const worst = bucketNames[lastVals.indexOf(Math.min(...lastVals))];
+  document.getElementById("mlMeta").innerHTML =
+    `${bucketNames.length} buckets · ${dates.length} dates · ` +
+    `Best: <span style="color:var(--pos)">${best}</span> · ` +
+    `Worst: <span style="color:var(--neg)">${worst}</span> · ` +
+    `Click legend to toggle`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    BOOT
    ═══════════════════════════════════════════════════════════════════════════ */
 async function boot() {
@@ -848,10 +1023,11 @@ async function boot() {
   try {
     ldMsg.textContent = "Fetching live data from Google Sheets…";
 
-    /* Fetch both CSVs in parallel */
-    const [summaryText, equityText] = await Promise.all([
+    /* Fetch all 3 CSVs in parallel */
+    const [summaryText, equityText, multiLineText] = await Promise.all([
       fetchCSV(SHEET_URL),
-      fetchCSV(EQUITY_CSV_URL).catch(e => { console.warn("Equity CSV fetch failed:", e); return null; })
+      fetchCSV(EQUITY_CSV_URL).catch(e => { console.warn("Equity CSV fetch failed:", e); return null; }),
+      fetchCSV(MULTILINE_CSV_URL).catch(e => { console.warn("Multi-line CSV fetch failed:", e); return null; })
     ]);
 
     ldMsg.textContent = "Parsing with PapaParse…";
@@ -882,6 +1058,21 @@ async function boot() {
         '<span style="color:var(--warn)">⚠ Equity curve: ' +
         (equityError ? equityError.message : 'No data points found') +
         '</span>';
+    }
+
+    /* Multi-line bucket PnL chart */
+    if (multiLineText) {
+      try {
+        const mlData = parseMultiLineCSV(multiLineText);
+        renderMultiLineChart(mlData);
+      } catch (e) {
+        console.warn("Multi-line PnL error:", e);
+        document.getElementById("mlMeta").innerHTML =
+          '<span style="color:var(--warn)">⚠ Bucket PnL: ' + e.message + '</span>';
+      }
+    } else {
+      document.getElementById("mlMeta").innerHTML =
+        '<span style="color:var(--warn)">⚠ Bucket PnL CSV unavailable — check published link</span>';
     }
 
     loader.classList.add("done");
