@@ -257,7 +257,15 @@ tr.tot td{border-top:2px solid var(--edge-hi);font-weight:600;color:var(--ink)!i
 <main class="wrap" id="main" style="display:none">
   <section class="kpi-grid" id="kpiRow"></section>
 
-  <section class="grid2 anim" style="animation-delay:.12s">
+  <section class="grid1 anim" style="animation-delay:.08s">
+    <div class="pnl" id="eqPanel">
+      <div class="pnl-hd"><div class="pnl-t"><span class="dot d-eq"></span>Actual Bets — Equity Curve</div></div>
+      <div class="chart-box chart-box-wide"><canvas id="cEquity"></canvas></div>
+      <div id="eqMeta" class="eq-meta"></div>
+    </div>
+  </section>
+
+  <section class="grid2 anim" style="animation-delay:.16s">
     <div class="pnl">
       <div class="pnl-hd"><div class="pnl-t"><span class="dot d-g"></span>ROI by Bucket</div></div>
       <div class="chart-box"><canvas id="cRoiBar"></canvas></div>
@@ -268,7 +276,7 @@ tr.tot td{border-top:2px solid var(--edge-hi);font-weight:600;color:var(--ink)!i
     </div>
   </section>
 
-  <section class="grid2 anim" style="animation-delay:.2s">
+  <section class="grid2 anim" style="animation-delay:.24s">
     <div class="pnl">
       <div class="pnl-hd"><div class="pnl-t"><span class="dot d-o"></span>Total Profit by Bucket</div></div>
       <div class="chart-box"><canvas id="cProfitBar"></canvas></div>
@@ -279,21 +287,13 @@ tr.tot td{border-top:2px solid var(--edge-hi);font-weight:600;color:var(--ink)!i
     </div>
   </section>
 
-  <section class="tbl-box anim" style="animation-delay:.28s">
+  <section class="tbl-box anim" style="animation-delay:.32s">
     <div class="pnl-hd" style="margin-bottom:.55rem">
       <div class="pnl-t"><span class="dot d-g"></span>Bucket Performance Summary</div>
     </div>
     <table class="t"><thead><tr>
       <th>Bucket</th><th>W</th><th>L</th><th>Total</th><th>Win %</th><th>ROI</th><th>Profit</th>
     </tr></thead><tbody id="tblBody"></tbody></table>
-  </section>
-
-  <section class="grid1 anim" style="animation-delay:.36s">
-    <div class="pnl">
-      <div class="pnl-hd"><div class="pnl-t"><span class="dot d-eq"></span>Actual Bets — Equity Curve</div></div>
-      <div class="chart-box chart-box-wide"><canvas id="cEquity"></canvas></div>
-      <div id="eqMeta" class="eq-meta"></div>
-    </div>
   </section>
 </main>
 
@@ -672,64 +672,101 @@ function renderMeta(stats) {
 function parseEquityCSV(csvText) {
   const parsed = Papa.parse(csvText, { header: false, skipEmptyLines: true, dynamicTyping: false });
   const rows = parsed.data;
-  if (!rows || rows.length < 2) throw new Error("Equity CSV appears empty.");
+  if (!rows || rows.length < 2) throw new Error("Equity CSV appears empty (" + (rows ? rows.length : 0) + " rows).");
 
-  /* Find header row — look for "Date" in first 20 rows */
+  /* Find header row — look for "Date" in first 25 rows */
   let hIdx = -1;
-  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+  for (let i = 0; i < Math.min(rows.length, 25); i++) {
     const lower = rows[i].map(c => (c || "").trim().toLowerCase());
-    if (lower.includes("date")) { hIdx = i; break; }
+    if (lower.some(h => h === "date" || h === "dates")) { hIdx = i; break; }
   }
-  if (hIdx < 0) throw new Error("Equity CSV: could not find header row with 'Date' column.");
+  if (hIdx < 0) throw new Error("Equity CSV: no header row with 'Date'. First row: [" + (rows[0] || []).join(", ") + "]");
 
   const hdr = rows[hIdx].map(c => (c || "").trim().toLowerCase());
-  const iDate = hdr.indexOf("date");
+  const iDate = hdr.findIndex(h => h === "date" || h === "dates");
 
-  /* Column K = index 10 (0-based). Also try fuzzy match for "cumulative" or "cum" or "profit" */
-  let iCum = 10; // Column K
-  const cumIdx = hdr.findIndex(h => h.includes("cumulative") || h.includes("cum profit") || h.includes("running"));
-  if (cumIdx >= 0) iCum = cumIdx;
+  /* Find cumulative profit column — try multiple strategies */
+  let iCum = -1;
+
+  /* Strategy 1: fuzzy match header name */
+  const cumKeywords = ["cumulative", "cum profit", "cum p&l", "running", "equity", "running profit", "total profit", "net profit"];
+  for (const kw of cumKeywords) {
+    const idx = hdr.findIndex(h => h.includes(kw));
+    if (idx >= 0) { iCum = idx; break; }
+  }
+
+  /* Strategy 2: Column K (index 10) if it exists and has numeric data */
+  if (iCum < 0 && rows.length > hIdx + 1) {
+    const testRow = rows[hIdx + 1];
+    if (testRow && testRow.length > 10) {
+      const testVal = (testRow[10] || "").trim().replace(/[$,]/g, "");
+      if (testVal && !isNaN(parseFloat(testVal))) iCum = 10;
+    }
+  }
+
+  /* Strategy 3: scan rightward from column D for first column with numeric $ data */
+  if (iCum < 0 && rows.length > hIdx + 1) {
+    const testRow = rows[hIdx + 1];
+    if (testRow) {
+      for (let c = 3; c < testRow.length; c++) {
+        if (c === iDate) continue;
+        const v = (testRow[c] || "").trim().replace(/[$,]/g, "").replace(/^\((.+)\)$/, "-$1");
+        if (v && !isNaN(parseFloat(v)) && Math.abs(parseFloat(v)) > 1) { iCum = c; break; }
+      }
+    }
+  }
+
+  /* Strategy 4: just use the last column */
+  if (iCum < 0 && rows.length > hIdx + 1) {
+    const testRow = rows[hIdx + 1];
+    if (testRow && testRow.length > 1) iCum = testRow.length - 1;
+  }
+
+  if (iCum < 0) throw new Error("Equity CSV: could not identify cumulative profit column. Headers: [" + hdr.join(", ") + "]");
+
+  console.log("Equity CSV: using Date col=" + iDate + ", Profit col=" + iCum + " ('" + hdr[iCum] + "'), header row=" + hIdx + ", data rows=" + (rows.length - hIdx - 1));
 
   /* Parse data rows */
   const points = [];
+  let skipped = 0;
   for (let r = hIdx + 1; r < rows.length; r++) {
     const row = rows[r];
-    if (!row || row.length <= iCum) continue;
+    if (!row || row.length <= Math.max(iDate, iCum)) { skipped++; continue; }
 
     const dateStr = (row[iDate] || "").trim();
-    if (!dateStr) continue;
+    if (!dateStr) { skipped++; continue; }
 
-    /* Parse date */
+    /* Parse date — handle many formats */
     let d;
     if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-      d = new Date(dateStr.split(" ")[0] + "T00:00:00");
-    } else if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(dateStr)) {
+      d = new Date(dateStr.split(" ")[0] + "T12:00:00");
+    } else if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(dateStr)) {
       const parts = dateStr.split("/");
-      const y = parts[2].length === 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
+      const y = parts[2] && parts[2].length <= 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
       d = new Date(y, parseInt(parts[0]) - 1, parseInt(parts[1]));
     } else {
       d = new Date(dateStr);
     }
-    if (isNaN(d.getTime())) continue;
+    if (!d || isNaN(d.getTime())) { skipped++; continue; }
 
-    /* Parse cumulative profit — strip $, commas, parens */
-    let valStr = (row[iCum] || "").trim().replace(/[$,]/g, "").replace(/^\((.+)\)$/, "-$1");
+    /* Parse cumulative profit — strip $, commas, parens, % */
+    let valStr = (row[iCum] || "").trim().replace(/[$,%]/g, "").replace(/,/g, "").replace(/^\((.+)\)$/, "-$1");
     const val = parseFloat(valStr);
-    if (isNaN(val)) continue;
+    if (isNaN(val)) { skipped++; continue; }
 
     points.push({ date: d, label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), profit: val });
   }
 
-  /* Sort by date and deduplicate — keep last value per date */
-  points.sort((a, b) => a.date - b.date);
-  const deduped = [];
-  for (let i = 0; i < points.length; i++) {
-    if (i === points.length - 1 || points[i].date.getTime() !== points[i + 1].date.getTime()) {
-      deduped.push(points[i]);
-    }
+  console.log("Equity CSV: parsed " + points.length + " points, skipped " + skipped + " rows");
+
+  if (points.length === 0) {
+    throw new Error("Equity CSV: 0 valid data points after parsing. Col " + iCum + " ('" + hdr[iCum] + "'). " +
+      "Sample row: [" + (rows[hIdx + 1] || []).join(" | ") + "]");
   }
 
-  return deduped;
+  /* Sort by date — keep ALL points (don't dedupe, each row is a bet) */
+  points.sort((a, b) => a.date - b.date);
+  return points;
 }
 
 function renderEquityCurve(points) {
@@ -821,9 +858,12 @@ async function boot() {
     const stats = processCSV(summaryText);
 
     let equityPoints = [];
+    let equityError = null;
     if (equityText) {
       try { equityPoints = parseEquityCSV(equityText); }
-      catch (e) { console.warn("Equity CSV parse error:", e); }
+      catch (e) { equityError = e; console.warn("Equity CSV parse error:", e); }
+    } else {
+      equityError = new Error("Fetch returned empty — CSV may not be published");
     }
 
     ldMsg.textContent = "Rendering dashboard…";
@@ -839,7 +879,9 @@ async function boot() {
       renderEquityCurve(equityPoints);
     } else {
       document.getElementById("eqMeta").innerHTML =
-        '<span style="color:var(--warn)">Equity data unavailable — check published CSV link</span>';
+        '<span style="color:var(--warn)">⚠ Equity curve: ' +
+        (equityError ? equityError.message : 'No data points found') +
+        '</span>';
     }
 
     loader.classList.add("done");
