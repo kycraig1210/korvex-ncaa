@@ -686,6 +686,18 @@ function renderMeta(stats) {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    EQUITY CURVE — Parse bet-level CSV and render cumulative profit line
+   ═══════════════════════════════════════════════════════════════════════════
+   
+   FIX: Now computes cumulative PnL from per-bet profit column instead of
+   relying on a pre-computed Cumulative PNL column. This prevents stale data
+   from Google Sheets publish cache and removes the need to drag formulas
+   down when adding new rows.
+   
+   Strategy:
+   1. Find the "profit" column (per-bet profit/loss)
+   2. Find the "result" column to filter out pending bets (no result yet)
+   3. Compute running cumulative sum in JavaScript
+   4. Fall back to pre-computed "Cumulative PNL" column if profit column missing
    ═══════════════════════════════════════════════════════════════════════════ */
 function parseEquityCSV(csvText) {
   const parsed = Papa.parse(csvText, { header: false, skipEmptyLines: true, dynamicTyping: false });
@@ -703,21 +715,32 @@ function parseEquityCSV(csvText) {
   const hdr = rows[hIdx].map(c => (c || "").trim().toLowerCase());
   const iDate = hdr.findIndex(h => h === "date" || h === "dates");
 
-  /* ── Find cumulative profit column ─────────────────────────────────
-     Known layout from sheet: date, league, matchup, ml odds, tier,
-     bucket, #, dk_spread, odds, wager, result, pnl, profit, notes,
-     Cumulative PNL — so it's the LAST column, header contains "cumulative"
+  /* ── Column detection ──────────────────────────────────────────────
+     Primary: use per-bet "profit" column + compute cumulative in JS
+     Fallback: use pre-computed "Cumulative PNL" column if profit missing
      ──────────────────────────────────────────────────────────────────── */
-  let iCum = -1;
-
-  /* Strategy 1: header contains "cumulative" or "cum" */
-  iCum = hdr.findIndex(h => h.includes("cumulative") || h.includes("cum "));
   
-  /* Strategy 2: header contains "running" or "equity" */
+  /* Find per-bet profit column */
+  const iProfit = hdr.findIndex(h => h === "profit");
+  
+  /* Find result column to filter pending bets */
+  const iResult = hdr.findIndex(h => h === "result");
+  
+  /* Find odds and wager columns for self-computed profit as extra fallback */
+  const iOdds = hdr.findIndex(h => h === "odds");
+  const iWager = hdr.findIndex(h => h === "wager");
+
+  /* Fallback: pre-computed cumulative column */
+  let iCum = -1;
+  iCum = hdr.findIndex(h => h.includes("cumulative") || h.includes("cum "));
   if (iCum < 0) iCum = hdr.findIndex(h => h.includes("running") || h.includes("equity"));
 
-  /* Strategy 3: last column that has a numeric-looking value in first data row */
-  if (iCum < 0 && rows.length > hIdx + 1) {
+  /* Determine which strategy to use */
+  const useProfit = iProfit >= 0;
+  const useCum = !useProfit && iCum >= 0;
+  
+  /* Last resort: find the last numeric column */
+  if (!useProfit && !useCum && rows.length > hIdx + 1) {
     const testRow = rows[hIdx + 1];
     if (testRow) {
       for (let c = testRow.length - 1; c >= 0; c--) {
@@ -727,22 +750,28 @@ function parseEquityCSV(csvText) {
     }
   }
 
-  /* Strategy 4: just use last non-empty column */
-  if (iCum < 0 && rows.length > hIdx + 1) {
-    const testRow = rows[hIdx + 1];
-    if (testRow) iCum = testRow.length - 1;
+  if (!useProfit && iCum < 0) {
+    throw new Error("Equity CSV: could not find 'profit' or 'Cumulative PNL' column. Headers: [" + hdr.join(", ") + "]");
   }
 
-  if (iCum < 0) throw new Error("Equity CSV: could not find cumulative profit column. Headers: [" + hdr.join(", ") + "]");
+  console.log(`Equity CSV: strategy=${useProfit ? 'COMPUTE from profit col ' + iProfit : 'READ cumulative col ' + iCum}, result col=${iResult}, Date col=${iDate}, header at row ${hIdx}, ${rows.length - hIdx - 1} data rows`);
 
-  console.log("Equity CSV: Date col=" + iDate + ", Cumulative col=" + iCum + " ('" + hdr[iCum] + "'), header at row " + hIdx + ", " + (rows.length - hIdx - 1) + " data rows");
+  /* ── Helper to parse a numeric cell ────────────────────────────────── */
+  function parseCell(val) {
+    let v = (val || "").trim();
+    if (!v) return NaN;
+    v = v.replace(/[$,]/g, "").replace(/^\((.+)\)$/, "-$1");
+    return parseFloat(v);
+  }
 
-  /* Parse data rows */
+  /* ── Parse data rows ───────────────────────────────────────────────── */
   const points = [];
   let skipped = 0;
+  let cumulative = 0;
+
   for (let r = hIdx + 1; r < rows.length; r++) {
     const row = rows[r];
-    if (!row || row.length <= Math.max(iDate, iCum)) { skipped++; continue; }
+    if (!row || row.length <= iDate) { skipped++; continue; }
 
     const dateStr = (row[iDate] || "").trim();
     if (!dateStr) { skipped++; continue; }
@@ -760,21 +789,66 @@ function parseEquityCSV(csvText) {
     }
     if (!d || isNaN(d.getTime())) { skipped++; continue; }
 
-    /* Parse cumulative value — strip $, commas, parens */
-    let v = (row[iCum] || "").trim();
-    if (!v) { skipped++; continue; }
-    v = v.replace(/[$,]/g, "").replace(/^\((.+)\)$/, "-$1");
-    const val = parseFloat(v);
-    if (isNaN(val)) { skipped++; continue; }
+    /* ── Strategy A: Compute cumulative from per-bet profit ────────── */
+    if (useProfit) {
+      /* Skip rows with no result (pending bets) */
+      if (iResult >= 0) {
+        const result = (row[iResult] || "").trim().toUpperCase();
+        if (result !== "W" && result !== "L") { skipped++; continue; }
+      }
 
-    points.push({ date: d, label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), profit: val });
+      const profit = parseCell(row[iProfit]);
+      
+      /* If profit column is empty but we have odds + wager + result, compute it */
+      if (isNaN(profit) && iOdds >= 0 && iWager >= 0 && iResult >= 0) {
+        const odds = parseCell(row[iOdds]);
+        const wager = parseCell(row[iWager]);
+        const result = (row[iResult] || "").trim().toUpperCase();
+        if (!isNaN(odds) && !isNaN(wager) && (result === "W" || result === "L")) {
+          let betProfit;
+          if (result === "W") {
+            betProfit = odds > 0 ? wager * (odds / 100) : wager * (100 / Math.abs(odds));
+          } else {
+            betProfit = -wager;
+          }
+          cumulative += betProfit;
+        } else {
+          skipped++;
+          continue;
+        }
+      } else if (isNaN(profit)) {
+        skipped++;
+        continue;
+      } else {
+        cumulative += profit;
+      }
+
+      points.push({
+        date: d,
+        label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        profit: Math.round(cumulative * 100) / 100
+      });
+    }
+    /* ── Strategy B: Read pre-computed cumulative column ───────────── */
+    else {
+      let v = (row[iCum] || "").trim();
+      if (!v) { skipped++; continue; }
+      const val = parseCell(v);
+      if (isNaN(val)) { skipped++; continue; }
+
+      points.push({
+        date: d,
+        label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        profit: val
+      });
+    }
   }
 
-  console.log("Equity CSV: " + points.length + " valid points, " + skipped + " skipped");
+  console.log("Equity CSV: " + points.length + " valid points, " + skipped + " skipped" + (useProfit ? ", computed cumulative from profit column" : ""));
 
   if (points.length === 0) {
     const sample = rows[hIdx + 1] || [];
-    throw new Error("0 valid points. Col " + iCum + " ('" + hdr[iCum] + "') sample value: '" + (sample[iCum] || "EMPTY") + "'. First data row: [" + sample.slice(0, 6).join(" | ") + " ... " + sample.slice(-3).join(" | ") + "]");
+    throw new Error("0 valid points. Headers: [" + hdr.join(", ") + "]. First data row: [" + sample.slice(0, 8).join(" | ") + "]");
   }
 
   /* Sort chronologically */
@@ -790,7 +864,7 @@ function renderEquityCurve(points) {
   const peak = Math.max(...data);
   const current = data[data.length - 1];
 
-  /* Gradient fill — green when positive, blends to red when negative */
+  /* Gradient fill — cyan glow */
   const ctx = document.getElementById("cEquity").getContext("2d");
   const grad = ctx.createLinearGradient(0, 0, 0, 400);
   grad.addColorStop(0, "rgba(34,211,238,0.15)");
